@@ -1,7 +1,10 @@
-import { InstructorLayout } from '../components/InstructorLayout';
+'use client';
+
+import { InstructorLayout } from '@/components/InstructorLayout';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ChevronLeft, ArrowRight } from 'lucide-react';
-import { Link, useParams } from 'react-router';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 
 const waterfallData = [
   { name: 'Direct Readiness', value: 0.65, color: '#3B82F6' },
@@ -30,16 +33,16 @@ const affectedStudents = [
   { id: '005', name: 'Student 005', readiness: 0.55 },
 ];
 
-export function RootCauseTrace() {
+export default function RootCauseTrace() {
   const params = useParams();
-  const conceptName = params.concept || 'Pointers';
+  const conceptName = (params.concept as string) ? decodeURIComponent(params.concept as string) : 'Pointers';
 
   return (
     <InstructorLayout>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-6">
-          <Link to="/dashboard" className="flex items-center gap-2 text-sm text-[#4A5568] hover:text-[#00274C] mb-2">
+          <Link href="/dashboard" className="flex items-center gap-2 text-sm text-[#4A5568] hover:text-[#00274C] mb-2">
             <ChevronLeft className="w-4 h-4" />
             Back to Dashboard
           </Link>

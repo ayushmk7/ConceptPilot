@@ -1,6 +1,8 @@
-import { InstructorLayout } from '../components/InstructorLayout';
+'use client';
+
+import { InstructorLayout } from '@/components/InstructorLayout';
 import { AlertTriangle } from 'lucide-react';
-import { Link } from 'react-router';
+import Link from 'next/link';
 
 const mockConcepts = [
   { name: 'C++ Basics', readiness: [15, 22, 45, 88, 77] },
@@ -34,7 +36,7 @@ const clusters = [
 const readinessColors = ['#DC2626', '#F97316', '#F59E0B', '#22C55E', '#16A34A'];
 const readinessLabels = ['0-0.2', '0.2-0.4', '0.4-0.6', '0.6-0.8', '0.8-1.0'];
 
-export function Dashboard() {
+export default function Dashboard() {
   return (
     <InstructorLayout>
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -82,7 +84,7 @@ export function Dashboard() {
                 {mockConcepts.map((concept) => (
                   <tr key={concept.name} className="border-b border-[#E2E8F0] hover:bg-[#E8EEF4] transition-colors">
                     <td className="py-2 px-3">
-                      <Link to={`/trace/${concept.name}`} className="text-sm font-medium text-[#00274C] hover:text-[#1B365D]">
+                      <Link href={`/trace/${concept.name}`} className="text-sm font-medium text-[#00274C] hover:text-[#1B365D]">
                         {concept.name}
                       </Link>
                     </td>
@@ -204,11 +206,11 @@ export function Dashboard() {
                 <span className="font-medium text-[#1A1A2E]">Quick Actions:</span>
               </div>
               <div className="flex gap-2">
-                <Link to="/student-report" className="text-sm text-[#00274C] hover:text-[#1B365D] font-medium">
+                <Link href="/student-report" className="text-sm text-[#00274C] hover:text-[#1B365D] font-medium">
                   View Sample Report
                 </Link>
                 <span className="text-[#E2E8F0]">•</span>
-                <Link to="/suggestions" className="text-sm text-[#00274C] hover:text-[#1B365D] font-medium">
+                <Link href="/suggestions" className="text-sm text-[#00274C] hover:text-[#1B365D] font-medium">
                   AI Suggestions
                 </Link>
               </div>

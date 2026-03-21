@@ -1,10 +1,13 @@
+'use client';
+
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Upload, FileText, Sparkles, Download, MessageSquare, ChevronRight, ChevronLeft } from 'lucide-react';
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const location = useLocation();
+  const pathname = usePathname();
 
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -14,7 +17,7 @@ export function Sidebar() {
     { path: '/canvas', label: 'Canvas', icon: MessageSquare },
   ];
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => pathname === path;
 
   return (
     <div className={`bg-[#F1F5F9] border-r border-[#E2E8F0] transition-all duration-300 flex flex-col ${isCollapsed ? 'w-14' : 'w-60'}`}>
@@ -51,7 +54,7 @@ export function Sidebar() {
             return (
               <Link
                 key={item.path}
-                to={item.path}
+                href={item.path}
                 className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
                   active
                     ? 'bg-[#FFF8E1] text-[#00274C]'

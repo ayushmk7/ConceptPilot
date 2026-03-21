@@ -1,7 +1,9 @@
-import { InstructorLayout } from '../components/InstructorLayout';
+'use client';
+
+import { InstructorLayout } from '@/components/InstructorLayout';
 import { Download, FileText, Users } from 'lucide-react';
 
-export function Reports() {
+export default function Reports() {
   return (
     <InstructorLayout>
 

@@ -1,3 +1,5 @@
+'use client';
+
 import { useCallback, useState } from 'react';
 import {
   ReactFlow,
@@ -13,8 +15,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Plus, Settings, Download, FileText } from 'lucide-react';
-import { ChatNode } from '../components/canvas/ChatNode';
-import { DocumentNode } from '../components/canvas/DocumentNode';
+import { ChatNode } from '@/components/canvas/ChatNode';
+import { DocumentNode } from '@/components/canvas/DocumentNode';
 
 const nodeTypes = {
   chat: ChatNode,
@@ -40,7 +42,7 @@ const initialEdges: Edge[] = [
   { id: 'e1-2', source: '1', target: '2', type: 'smoothstep' },
 ];
 
-export function InfiniteCanvas() {
+export default function InfiniteCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [showAddMenu, setShowAddMenu] = useState(false);

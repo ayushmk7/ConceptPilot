@@ -1,11 +1,11 @@
-import { Link } from 'react-router';
+import Link from 'next/link';
 import { BarChart3, Sparkles, FileText } from 'lucide-react';
 
-export function LandingPage() {
+export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#FAFBFC]">
       <nav className="h-14 bg-[#00274C] text-white flex items-center px-6">
-        <Link to="/" className="text-lg font-semibold tracking-tight">
+        <Link href="/" className="text-lg font-semibold tracking-tight">
           PreReq
         </Link>
       </nav>
@@ -19,7 +19,7 @@ export function LandingPage() {
             Upload exam data, map concepts, and get explainable readiness analytics powered by AI.
           </p>
           <Link
-            to="/upload"
+            href="/upload"
             className="inline-block px-6 py-3 bg-[#FFCB05] text-[#00274C] rounded-md font-medium hover:bg-[#FFCB05]/90 transition-colors"
           >
             Get Started

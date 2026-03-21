@@ -1,0 +1,101 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+dist/
+build/
+coverage/
+
+# Next.js
+.next/
+out/
+
+# Vercel
+.vercel
+
+# Turborepo
+.turbo
+
+# Bun
+bun.lockb
+.bun/
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env*
+.envrc
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+*.log
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.pem
+*.key
+*.cert
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.classpath
+.settings/
+.sublime-project
+.sublime-workspace
+*.tsbuildinfo
+
+# Linters & Formatters
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# Python (Backend)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.python-version
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints
+
+# Build Artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Project specific
+diag.js
+frontend/diag.js
+task.md
+walkthrough.md
+implementation_plan.md
+.claude/
+.gemini/
+.antigravity/
+brain/

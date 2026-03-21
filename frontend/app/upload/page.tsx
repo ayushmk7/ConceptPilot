@@ -1,11 +1,13 @@
+'use client';
+
 import { useState } from 'react';
 import { Check, Upload, Loader2, AlertCircle } from 'lucide-react';
-import { InstructorLayout } from '../components/InstructorLayout';
-import { useNavigate } from 'react-router';
+import { InstructorLayout } from '@/components/InstructorLayout';
+import { useRouter } from 'next/navigation';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
-export function UploadWizard() {
+export default function UploadWizard() {
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [course, setCourse] = useState('');
   const [exam, setExam] = useState('');
@@ -14,7 +16,7 @@ export function UploadWizard() {
   const [graphOption, setGraphOption] = useState<'upload' | 'ai'>('upload');
   const [graphUploaded, setGraphUploaded] = useState(false);
   const [computing, setComputing] = useState(false);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const steps = [
     { num: 1, label: 'Course & Exam' },
@@ -28,7 +30,7 @@ export function UploadWizard() {
     setComputing(true);
     setTimeout(() => {
       setComputing(false);
-      navigate('/dashboard');
+      router.push('/dashboard');
     }, 2000);
   };
 

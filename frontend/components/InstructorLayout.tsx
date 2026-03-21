@@ -1,3 +1,5 @@
+'use client';
+
 import { TopNav } from './TopNav';
 import { Sidebar } from './Sidebar';
 

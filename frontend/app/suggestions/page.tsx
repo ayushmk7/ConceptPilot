@@ -1,6 +1,8 @@
-import { InstructorLayout } from '../components/InstructorLayout';
+'use client';
+
+import React, { useState } from 'react';
+import { InstructorLayout } from '@/components/InstructorLayout';
 import { Check, X, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
 
 const suggestions = [
   {
@@ -37,7 +39,7 @@ const suggestions = [
   },
 ];
 
-export function AISuggestions() {
+export default function AISuggestions() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [statuses, setStatuses] = useState<Record<number, string>>(
     Object.fromEntries(suggestions.map((s) => [s.id, s.status]))
@@ -104,9 +106,8 @@ export function AISuggestions() {
             </thead>
             <tbody>
               {suggestions.map((suggestion) => (
-                <>
+                <React.Fragment key={suggestion.id}>
                   <tr
-                    key={suggestion.id}
                     className="border-b border-[#E2E8F0] hover:bg-[#E8EEF4] transition-colors cursor-pointer"
                     onClick={() => setExpandedId(expandedId === suggestion.id ? null : suggestion.id)}
                   >
@@ -177,7 +178,7 @@ export function AISuggestions() {
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </table>

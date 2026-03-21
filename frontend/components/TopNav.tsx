@@ -1,8 +1,11 @@
-import { Link, useLocation } from 'react-router';
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ChevronDown, User } from 'lucide-react';
 
 export function TopNav() {
-  const location = useLocation();
+  const pathname = usePathname();
 
   const navLinks = [
     { path: '/dashboard', label: 'Dashboard' },
@@ -11,11 +14,11 @@ export function TopNav() {
     { path: '/upload', label: 'Upload' },
   ];
 
-  const isActive = (path: string) => location.pathname.startsWith(path);
+  const isActive = (path: string) => pathname.startsWith(path);
 
   return (
     <nav className="h-14 bg-[#00274C] text-white flex items-center px-6 sticky top-0 z-50">
-      <Link to="/" className="text-lg font-semibold tracking-tight mr-12">
+      <Link href="/" className="text-lg font-semibold tracking-tight mr-12">
         PreReq
       </Link>
 
@@ -23,7 +26,7 @@ export function TopNav() {
         {navLinks.map((link) => (
           <Link
             key={link.path}
-            to={link.path}
+            href={link.path}
             className={`relative py-4 transition-colors ${
               isActive(link.path) ? 'text-white' : 'text-white/80 hover:text-white'
             }`}

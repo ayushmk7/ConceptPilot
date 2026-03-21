@@ -1,3 +1,5 @@
+'use client';
+
 import { ReactFlow, Background } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -37,10 +39,10 @@ const studyPlan = [
   { step: 3, concept: 'Inheritance', readiness: 0.38, reason: 'Depends on strong understanding of classes' },
 ];
 
-export function StudentReport() {
+export default function StudentReport() {
   const nodes = conceptNodes.map((node) => ({
     ...node,
-    type: 'default',
+    type: 'default' as const,
     style: {
       background: getReadinessColor(node.data.readiness),
       color: '#fff',
