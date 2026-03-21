@@ -3,75 +3,63 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, FileText, Sparkles, MessageSquare, ChevronRight, ChevronLeft, GitBranch } from 'lucide-react';
+import { LayoutDashboard, Upload, FileText, BookOpen, Headphones, ChevronRight, ChevronLeft } from 'lucide-react';
 
-export function Sidebar() {
+export function StudentSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
 
   const menuItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/upload', label: 'Upload', icon: Upload },
-    { path: '/graph', label: 'Graph Editor', icon: GitBranch },
-    { path: '/reports', label: 'Reports', icon: FileText },
-    { path: '/suggestions', label: 'AI Suggestions', icon: Sparkles },
-    { path: '/canvas', label: 'Canvas', icon: MessageSquare },
+    { path: '/student', label: 'Overview', icon: LayoutDashboard, exact: true },
+    { path: '/student/report', label: 'My Report', icon: FileText },
+    { path: '/student/study-plan', label: 'Study Plan', icon: BookOpen },
+    { path: '/student/study-content', label: 'Study Content', icon: Headphones },
+    { path: '/student/upload', label: 'Upload Test', icon: Upload },
   ];
 
-  const isActive = (path: string) => pathname === path;
+  const isActive = (item: { path: string; exact?: boolean }) =>
+    item.exact ? pathname === item.path : pathname.startsWith(item.path);
 
   return (
     <div className={`hidden md:flex bg-gradient-to-b from-[#F8FAFC] to-[#F1F5F9] border-r border-[#E2E8F0] transition-all duration-300 flex-col ${isCollapsed ? 'w-14' : 'w-60'}`}>
       <div className="flex-1 py-6">
-        <div className="px-4 mb-6">
-          <div className={`text-[10px] font-semibold text-[#94A3B8] tracking-widest mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
-            COURSE
-          </div>
-          <select className={`w-full px-3 py-2 border border-[#CBD5E1] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#00274C]/20 bg-white shadow-sm ${isCollapsed ? 'hidden' : 'block'}`}>
-            <option>EECS 280</option>
-            <option>EECS 281</option>
-          </select>
-        </div>
-
-        <div className="px-4 mb-6">
-          <div className={`text-[10px] font-semibold text-[#94A3B8] tracking-widest mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
-            EXAM
-          </div>
-          <select className={`w-full px-3 py-2 border border-[#CBD5E1] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#00274C]/20 bg-white shadow-sm ${isCollapsed ? 'hidden' : 'block'}`}>
-            <option>Midterm 1</option>
-            <option>Midterm 2</option>
-            <option>Final</option>
-          </select>
-        </div>
-
         <div className={`text-[10px] font-semibold text-[#94A3B8] tracking-widest px-4 mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
-          QUICK LINKS
+          NAVIGATION
         </div>
 
         <nav className="space-y-1 px-2">
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const active = isActive(item.path);
+            const active = isActive(item);
             return (
               <Link
                 key={item.path}
                 href={item.path}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                   active
-                    ? 'bg-[#FFF8E1] text-[#00274C] shadow-sm border border-[#FFCB05]/20'
+                    ? 'bg-[#EFF6FF] text-[#1B365D] shadow-sm border border-[#3B82F6]/20'
                     : 'text-[#4A5568] hover:bg-white hover:shadow-sm border border-transparent'
                 }`}
                 title={isCollapsed ? item.label : ''}
               >
-                <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-[#00274C]' : 'text-[#94A3B8]'}`} />
+                <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-[#3B82F6]' : 'text-[#94A3B8]'}`} />
                 {!isCollapsed && <span className="text-sm font-medium">{item.label}</span>}
               </Link>
             );
           })}
         </nav>
+
+        {/* Info box */}
+        {!isCollapsed && (
+          <div className="mx-4 mt-8 p-4 bg-[#EFF6FF] rounded-xl border border-[#3B82F6]/10">
+            <p className="text-xs font-medium text-[#1B365D] mb-1">Your readiness report</p>
+            <p className="text-[11px] text-[#4A5568] leading-relaxed">
+              This report is private to you. No peer comparisons or rankings are shown.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Decorative network graphic */}
       {!isCollapsed && (
         <div className="px-4 pb-4">
           <svg viewBox="0 0 180 60" className="w-full opacity-[0.06]" aria-hidden="true">

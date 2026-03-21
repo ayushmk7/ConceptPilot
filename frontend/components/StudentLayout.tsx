@@ -1,23 +1,21 @@
 'use client';
 
-import { TopNav } from './TopNav';
-import { Sidebar } from './Sidebar';
-import { ChatAssistant } from './ChatAssistant';
+import { StudentTopNav } from './StudentTopNav';
+import { StudentSidebar } from './StudentSidebar';
 import { ErrorBoundary } from './ErrorBoundary';
 
-export function InstructorLayout({ children }: { children: React.ReactNode }) {
+export function StudentLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[#FAFBFC] flex flex-col">
-      <TopNav />
+      <StudentTopNav />
       <div className="flex flex-1">
-        <Sidebar />
+        <StudentSidebar />
         <main className="flex-1 overflow-auto">
           <ErrorBoundary>
             {children}
           </ErrorBoundary>
         </main>
       </div>
-      <ChatAssistant />
     </div>
   );
 }
