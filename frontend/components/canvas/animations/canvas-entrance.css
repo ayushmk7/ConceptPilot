@@ -1,0 +1,27 @@
+/* ── Canvas entrance animation & transitions ── */
+
+/* 
+ * We use a transition on transform and opacity while the entry class is active.
+ * When the entrance class is removed, the transition is removed so dragging is instant.
+ */
+
+.canvas-entrance .react-flow__node {
+  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.8s ease-out !important;
+  opacity: 1;
+}
+
+.canvas-entrance-start .react-flow__node {
+  opacity: 0;
+}
+
+/* Edges: fade in after nodes */
+.canvas-entrance .react-flow__edge path {
+  transition: opacity 1s ease-out;
+  transition-delay: 0.3s;
+  opacity: 1;
+}
+
+.canvas-entrance-start .react-flow__edge path {
+  opacity: 0;
+}
+

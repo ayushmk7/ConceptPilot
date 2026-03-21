@@ -481,3 +481,27 @@ export async function getHeatmapData(_examId: string) {
     { name: 'Polymorphism', readiness: [68, 78, 52, 28, 21] },
   ];
 }
+
+// ── Shared fetch wrapper (used by canvas-api.ts) ──
+
+export async function apiFetch<T = unknown>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(body || res.statusText);
+  }
+
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
