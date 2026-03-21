@@ -15,10 +15,10 @@ export function Sidebar() {
     { path: '/graph', label: 'Graph Editor', icon: GitBranch },
     { path: '/reports', label: 'Reports', icon: FileText },
     { path: '/suggestions', label: 'AI Suggestions', icon: Sparkles },
-    { path: '/canvas', label: 'Canvas', icon: MessageSquare },
+    { path: '/canvas', label: 'Canvas', icon: MessageSquare, href: '/canvas?role=instructor' },
   ];
 
-  const isActive = (path: string) => pathname === path;
+  const isActive = (path: string) => (path === '/canvas' ? pathname.startsWith('/canvas') : pathname === path);
 
   return (
     <div className={`hidden md:flex bg-gradient-to-b from-[#F8FAFC] to-[#F1F5F9] border-r border-[#E2E8F0] transition-all duration-300 flex-col ${isCollapsed ? 'w-14' : 'w-60'}`}>
@@ -55,7 +55,7 @@ export function Sidebar() {
             return (
               <Link
                 key={item.path}
-                href={item.path}
+                href={item.href ?? item.path}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                   active
                     ? 'bg-[#FFF8E1] text-[#00274C] shadow-sm border border-[#FFCB05]/20'

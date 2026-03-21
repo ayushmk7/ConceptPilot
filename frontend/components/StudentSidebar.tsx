@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, FileText, BookOpen, Headphones, ChevronRight, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, Upload, FileText, BookOpen, Headphones, ChevronRight, ChevronLeft, MessageSquare } from 'lucide-react';
 
 export function StudentSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -15,6 +15,7 @@ export function StudentSidebar() {
     { path: '/student/study-plan', label: 'Study Plan', icon: BookOpen },
     { path: '/student/study-content', label: 'Study Content', icon: Headphones },
     { path: '/student/upload', label: 'Upload Test', icon: Upload },
+    { path: '/canvas', label: 'Canvas', icon: MessageSquare, href: '/canvas?role=student' },
   ];
 
   const isActive = (item: { path: string; exact?: boolean }) =>
@@ -34,7 +35,7 @@ export function StudentSidebar() {
             return (
               <Link
                 key={item.path}
-                href={item.path}
+                href={item.href ?? item.path}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                   active
                     ? 'bg-[#EFF6FF] text-[#1B365D] shadow-sm border border-[#3B82F6]/20'

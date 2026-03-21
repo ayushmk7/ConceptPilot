@@ -18,6 +18,7 @@ export function StudentTopNav() {
     { path: '/student/study-plan', label: 'Study Plan' },
     { path: '/student/study-content', label: 'Study Content' },
     { path: '/student/upload', label: 'Upload' },
+    { path: '/canvas', label: 'Canvas', href: '/canvas?role=student' },
   ];
 
   const isActive = (link: { path: string; exact?: boolean }) =>
@@ -40,7 +41,7 @@ export function StudentTopNav() {
         {navLinks.map((link) => (
           <Link
             key={link.path}
-            href={link.path}
+            href={link.href ?? link.path}
             className={`relative px-3 py-4 rounded-t-md text-sm transition-colors whitespace-nowrap ${
               isActive(link) ? 'text-white' : 'text-white/60 hover:text-white'
             }`}

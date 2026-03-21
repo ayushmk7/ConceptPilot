@@ -20,6 +20,12 @@ function saveProjectsIndex(projects: ProjectEntry[]) {
   localStorage.setItem('canvas_projects_index', JSON.stringify(projects));
 }
 
+function getCanvasRole() {
+  if (typeof window === 'undefined') return 'instructor';
+  const role = localStorage.getItem('canvas_role_preference');
+  return role === 'student' ? 'student' : 'instructor';
+}
+
 export default function CanvasProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectEntry[]>(getProjects);
@@ -34,7 +40,8 @@ export default function CanvasProjectsPage() {
     const updated = [entry, ...projects];
     setProjects(updated);
     saveProjectsIndex(updated);
-    router.push(`/canvas/${id}`);
+    const role = getCanvasRole();
+    router.push(`/canvas/${id}?role=${role}`);
   };
 
   const deleteProject = (id: string) => {
@@ -83,7 +90,10 @@ export default function CanvasProjectsPage() {
             {projects.map((project) => (
               <div
                 key={project.id}
-                onClick={() => router.push(`/canvas/${project.id}`)}
+                onClick={() => {
+                  const role = getCanvasRole();
+                  router.push(`/canvas/${project.id}?role=${role}`);
+                }}
                 className="group bg-white border border-[#E2E8F0] rounded-xl p-5 cursor-pointer hover:border-[#00274C] hover:shadow-md transition-all"
               >
                 <div className="h-28 bg-[#F1F5F9] rounded-lg mb-4 flex items-center justify-center">

@@ -18,7 +18,7 @@ export function TopNav() {
     { path: '/graph', label: 'Graph' },
     { path: '/reports', label: 'Reports' },
     { path: '/suggestions', label: 'AI Review' },
-    { path: '/canvas', label: 'Canvas' },
+    { path: '/canvas', label: 'Canvas', href: '/canvas?role=instructor' },
   ];
 
   const isActive = (path: string) => pathname.startsWith(path);
@@ -40,7 +40,7 @@ export function TopNav() {
         {navLinks.map((link) => (
           <Link
             key={link.path}
-            href={link.path}
+            href={link.href ?? link.path}
             className={`relative px-3 py-4 rounded-t-md text-sm transition-colors whitespace-nowrap ${
               isActive(link.path) ? 'text-white' : 'text-white/60 hover:text-white'
             }`}

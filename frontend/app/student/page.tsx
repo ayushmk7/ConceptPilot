@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { StudentLayout } from '@/components/StudentLayout';
 import { DotPattern } from '@/components/svg/DotPattern';
-import { BarChart3, AlertTriangle, BookOpen, TrendingUp, Headphones } from 'lucide-react';
+import { BarChart3, AlertTriangle, BookOpen, TrendingUp, Headphones, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { PageLoader } from '@/components/LoadingSkeleton';
 import { ErrorState } from '@/components/ErrorBoundary';
@@ -149,6 +149,15 @@ export default function StudentDashboard() {
                     <div>
                       <div className="text-sm font-medium text-[#1A1A2E]">Upload a Test</div>
                       <div className="text-xs text-[#94A3B8]">Analyze another exam</div>
+                    </div>
+                  </Link>
+                  <Link href="/canvas?role=student" className="flex items-center gap-3 p-3 rounded-xl border border-[#E2E8F0] hover:bg-[#F8FAFC] transition-colors">
+                    <div className="w-9 h-9 rounded-lg bg-[#EFF6FF] flex items-center justify-center flex-shrink-0">
+                      <MessageSquare className="w-4 h-4 text-[#3B82F6]" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-[#1A1A2E]">Open Infinite Canvas</div>
+                      <div className="text-xs text-[#94A3B8]">Brainstorm and map your understanding</div>
                     </div>
                   </Link>
                 </div>
