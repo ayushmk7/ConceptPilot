@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.config import settings
 from app.database import Base, _clean_async_url, _ssl_ctx
 from app.models.models import *  # noqa: F401, F403 — import all models for autogenerate
+from app.models import canvas  # noqa: F401 - register canvas models for autogenerate
 
 # Alembic Config object
 config = context.config

@@ -41,9 +41,20 @@ class Settings(BaseSettings):
     OCI_CONFIG_FILE: str = "~/.oci/config"
     OCI_CONFIG_PROFILE: str = "DEFAULT"
 
+    # Canvas — Infinite Canvas feature settings
+    ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_VOICE_ID: str = ""
+    VULTR_ACCESS_KEY: str = ""
+    VULTR_SECRET_KEY: str = ""
+    VULTR_BUCKET_NAME: str = ""
+    VULTR_ENDPOINT_URL: str = ""
+    CANVAS_RATE_LIMIT_DAILY: int = 100
+    CANVAS_RATE_LIMIT_COOLDOWN_SECONDS: int = 2
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 settings = Settings()

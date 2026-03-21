@@ -7,6 +7,8 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.routers import canvas as canvas_router
+
 from app.config import settings
 from app.middleware.observability import ObservabilityMiddleware
 from app.routers import (
@@ -62,7 +64,11 @@ app = FastAPI(
 
 app.add_middleware(ObservabilityMiddleware)
 
-cors_origins = [origin.strip() for origin in settings.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
+cors_origins = [
+    origin.strip()
+    for origin in settings.CORS_ALLOWED_ORIGINS.split(",")
+    if origin.strip()
+]
 if not cors_origins:
     cors_origins = ["*"]
 
@@ -86,6 +92,7 @@ app.include_router(parameters.router)
 app.include_router(ai_suggestions.router)
 app.include_router(export.router)
 app.include_router(chat.router)
+app.include_router(canvas_router.router, prefix="/api/canvas", tags=["canvas"])
 
 
 @app.get("/", tags=["Root"])
@@ -114,9 +121,7 @@ async def health_check():
 
     try:
         async with engine.connect() as conn:
-            await conn.execute(
-                __import__("sqlalchemy").text("SELECT 1")
-            )
+            await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
         health["database"] = "connected"
     except Exception as e:
         health["database"] = f"error: {str(e)[:100]}"
