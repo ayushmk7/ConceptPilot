@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Dependencies
 node_modules/
 .pnp
@@ -99,3 +100,6 @@ implementation_plan.md
 .gemini/
 .antigravity/
 brain/
+=======
+.claude/
+>>>>>>> 6a91caf (gitignore)
