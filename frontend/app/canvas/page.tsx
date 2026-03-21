@@ -1,186 +1,117 @@
 'use client';
 
-import { useCallback, useState } from 'react';
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  addEdge,
-  useNodesState,
-  useEdgesState,
-  type Connection,
-  type Edge,
-  type Node,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-import { Plus, Settings, Download, FileText } from 'lucide-react';
-import { ChatNode } from '@/components/canvas/ChatNode';
-import { DocumentNode } from '@/components/canvas/DocumentNode';
-import { InstructorLayout } from '@/components/InstructorLayout';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Plus, Layout, Clock, Trash2 } from 'lucide-react';
 
-const nodeTypes = {
-  chat: ChatNode,
-  document: DocumentNode,
-};
+interface ProjectEntry {
+  id: string;
+  name: string;
+  updatedAt: string;
+}
 
-const initialNodes: Node[] = [
-  {
-    id: '1',
-    type: 'chat',
-    position: { x: 250, y: 100 },
-    data: { title: 'Study Session', skill: 'Tutor', messages: [] },
-  },
-  {
-    id: '2',
-    type: 'document',
-    position: { x: 550, y: 150 },
-    data: { title: 'Lecture Notes.pdf', pages: 24 },
-  },
-];
+function getProjects(): ProjectEntry[] {
+  if (typeof window === 'undefined') return [];
+  const raw = localStorage.getItem('canvas_projects_index');
+  return raw ? (JSON.parse(raw) as ProjectEntry[]) : [];
+}
 
-const initialEdges: Edge[] = [
-  { id: 'e1-2', source: '1', target: '2', type: 'smoothstep' },
-];
+function saveProjectsIndex(projects: ProjectEntry[]) {
+  localStorage.setItem('canvas_projects_index', JSON.stringify(projects));
+}
 
-export default function InfiniteCanvas() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const [showAddMenu, setShowAddMenu] = useState(false);
+export default function CanvasProjectsPage() {
+  const router = useRouter();
+  const [projects, setProjects] = useState<ProjectEntry[]>(getProjects);
 
-  const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
-  );
-
-  const addChatNode = () => {
-    const newNode: Node = {
-      id: `chat-${Date.now()}`,
-      type: 'chat',
-      position: { x: Math.random() * 500 + 100, y: Math.random() * 300 + 100 },
-      data: { title: 'New Chat', skill: 'Tutor', messages: [] },
+  const createProject = () => {
+    const id = `proj-${Date.now()}`;
+    const entry: ProjectEntry = {
+      id,
+      name: 'Untitled Workspace',
+      updatedAt: new Date().toISOString(),
     };
-    setNodes((nds) => [...nds, newNode]);
-    setShowAddMenu(false);
+    const updated = [entry, ...projects];
+    setProjects(updated);
+    saveProjectsIndex(updated);
+    router.push(`/canvas/${id}`);
   };
 
-  const addDocumentNode = () => {
-    const newNode: Node = {
-      id: `doc-${Date.now()}`,
-      type: 'document',
-      position: { x: Math.random() * 500 + 100, y: Math.random() * 300 + 100 },
-      data: { title: 'New Document.pdf', pages: 12 },
-    };
-    setNodes((nds) => [...nds, newNode]);
-    setShowAddMenu(false);
+  const deleteProject = (id: string) => {
+    const updated = projects.filter((p) => p.id !== id);
+    setProjects(updated);
+    saveProjectsIndex(updated);
+    localStorage.removeItem(`canvas_project_${id}`);
   };
 
   return (
-    <InstructorLayout>
-      <div className="h-full w-full bg-[#FAFBFC] relative">
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
-          <div className="bg-white rounded-full shadow-lg border border-[#E2E8F0] px-6 py-3 flex items-center gap-4">
-            <input
-              type="text"
-              defaultValue="EECS 280 Study Workspace"
-              className="font-medium text-[#00274C] bg-transparent border-none outline-none"
-            />
-
-            <div className="h-6 w-px bg-[#E2E8F0]" />
-
-            <div className="relative">
-              <button
-                onClick={() => setShowAddMenu(!showAddMenu)}
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-[#E8EEF4] rounded-md transition-colors"
-              >
-                <Plus className="w-4 h-4 text-[#00274C]" />
-                <span className="text-sm font-medium text-[#00274C]">Add</span>
-              </button>
-
-              {showAddMenu && (
-                <div className="absolute top-full mt-2 left-0 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-2 min-w-[160px]">
-                  <button
-                    onClick={addChatNode}
-                    className="w-full text-left px-4 py-2 text-sm text-[#1A1A2E] hover:bg-[#E8EEF4] transition-colors"
-                  >
-                    Add Chat
-                  </button>
-                  <button
-                    onClick={addDocumentNode}
-                    className="w-full text-left px-4 py-2 text-sm text-[#1A1A2E] hover:bg-[#E8EEF4] transition-colors"
-                  >
-                    Add from File
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <button className="px-4 py-1.5 bg-[#FFCB05] text-[#00274C] rounded-md text-sm font-medium hover:bg-[#FFCB05]/90 transition-colors">
-              Generate Study Content
-            </button>
-
-            <button className="p-1.5 hover:bg-[#E8EEF4] rounded-md transition-colors">
-              <FileText className="w-4 h-4 text-[#00274C]" />
-            </button>
-
-            <button className="p-1.5 hover:bg-[#E8EEF4] rounded-md transition-colors">
-              <Download className="w-4 h-4 text-[#00274C]" />
-            </button>
-
-            <button className="p-1.5 hover:bg-[#E8EEF4] rounded-md transition-colors">
-              <Settings className="w-4 h-4 text-[#00274C]" />
-            </button>
+    <div className="min-h-screen bg-[#FAFBFC]">
+      <div className="max-w-5xl mx-auto px-6 py-12">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-[#00274C]">Canvas Workspaces</h1>
+            <p className="text-sm text-[#64748B] mt-1">
+              Create and manage your infinite canvas study spaces
+            </p>
           </div>
+          <button
+            onClick={createProject}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#00274C] text-white rounded-lg hover:bg-[#1B365D] transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            New Workspace
+          </button>
         </div>
 
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            {['JD', 'SK', 'AM'].map((initials, idx) => (
+        {projects.length === 0 ? (
+          <div className="text-center py-24 border-2 border-dashed border-[#E2E8F0] rounded-xl">
+            <Layout className="w-12 h-12 text-[#94A3B8] mx-auto mb-4" />
+            <h2 className="text-lg font-medium text-[#1A1A2E] mb-2">No workspaces yet</h2>
+            <p className="text-sm text-[#64748B] mb-6">
+              Create your first canvas workspace to get started
+            </p>
+            <button
+              onClick={createProject}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#FFCB05] text-[#00274C] rounded-lg hover:bg-[#FFCB05]/90 transition-colors text-sm font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              Create Workspace
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projects.map((project) => (
               <div
-                key={initials}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white"
-                style={{
-                  backgroundColor: ['#3B82F6', '#16A34A', '#F59E0B'][idx],
-                }}
-                title={`User ${initials}`}
+                key={project.id}
+                onClick={() => router.push(`/canvas/${project.id}`)}
+                className="group bg-white border border-[#E2E8F0] rounded-xl p-5 cursor-pointer hover:border-[#00274C] hover:shadow-md transition-all"
               >
-                {initials}
+                <div className="h-28 bg-[#F1F5F9] rounded-lg mb-4 flex items-center justify-center">
+                  <Layout className="w-8 h-8 text-[#94A3B8]" />
+                </div>
+                <h3 className="text-sm font-medium text-[#1A1A2E] mb-1 truncate">
+                  {project.name}
+                </h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1 text-xs text-[#94A3B8]">
+                    <Clock className="w-3 h-3" />
+                    <span>{new Date(project.updatedAt).toLocaleDateString()}</span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteProject(project.id);
+                    }}
+                    className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-50 text-[#94A3B8] hover:text-red-500 transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
-        </div>
-
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          fitView
-          defaultEdgeOptions={{
-            type: 'smoothstep',
-            animated: false,
-            style: { stroke: '#CBD5E1', strokeWidth: 2 },
-          }}
-        >
-          <Background
-            gap={20}
-            size={1}
-            color="#E2E8F0"
-            style={{ backgroundColor: '#FAFBFC' }}
-          />
-          <Controls
-            className="bg-white rounded-lg shadow-lg border border-[#E2E8F0]"
-            showInteractive={false}
-          />
-          <MiniMap
-            className="bg-white rounded-lg shadow-lg border border-[#E2E8F0]"
-            nodeColor="#00274C"
-            maskColor="rgba(0, 0, 0, 0.1)"
-          />
-        </ReactFlow>
+        )}
       </div>
-    </InstructorLayout>
+    </div>
   );
 }
