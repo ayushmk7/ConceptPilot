@@ -1,6 +1,7 @@
 """Async SQLAlchemy database engine and session management."""
 
 import ssl as _ssl
+from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -21,29 +22,42 @@ def _clean_async_url(url: str) -> str:
     parsed = urlparse(url)
     params = parse_qs(parsed.query)
 
-    # Remove params asyncpg doesn't support as URL query args
     for key in ("sslmode", "channel_binding"):
         params.pop(key, None)
 
-    # Rebuild query string
     clean_query = urlencode(params, doseq=True)
     cleaned = parsed._replace(query=clean_query)
     return urlunparse(cleaned)
 
 
-database_url = _clean_async_url(settings.DATABASE_URL)
+def _build_connect_args() -> dict[str, Any]:
+    """Return asyncpg connect_args based on DATABASE_SSL_MODE."""
+    mode = settings.DATABASE_SSL_MODE.lower().strip()
 
-# Create SSL context for Neon Postgres (asyncpg needs explicit SSL context)
-_ssl_ctx = _ssl.create_default_context()
-_ssl_ctx.check_hostname = False
-_ssl_ctx.verify_mode = _ssl.CERT_NONE
+    if mode == "disable":
+        return {}
+
+    if mode == "verify-full":
+        ctx = _ssl.create_default_context()
+        return {"ssl": ctx}
+
+    # "require" — encrypt but skip cert verification (Neon, Supabase, etc.)
+    # "prefer"  — same context; asyncpg will fall back to plain if server
+    #             doesn't support SSL, but the context itself is permissive.
+    ctx = _ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = _ssl.CERT_NONE
+    return {"ssl": ctx}
+
+
+database_url = _clean_async_url(settings.DATABASE_URL)
 
 engine = create_async_engine(
     database_url,
     echo=False,
     pool_size=5,
     max_overflow=10,
-    connect_args={"ssl": _ssl_ctx},
+    connect_args=_build_connect_args(),
 )
 
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

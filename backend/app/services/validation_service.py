@@ -11,24 +11,23 @@ from typing import Any, Optional
 
 import networkx as nx
 
+from app.config import settings
 from app.schemas.schemas import ValidationError
 from app.services.graph_service import build_graph
 
-MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
-MAX_ROW_COUNT = 500_000
-
 
 def validate_file_limits(content: bytes) -> list[ValidationError]:
-    """Enforce PRD file size and row limits."""
+    """Enforce PRD file size and row limits (see MAX_FILE_SIZE_MB, MAX_CSV_ROW_COUNT)."""
     errors: list[ValidationError] = []
-    if len(content) > MAX_FILE_SIZE_BYTES:
+    max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+    if len(content) > max_bytes:
         errors.append(ValidationError(
-            message=f"File exceeds maximum size of {MAX_FILE_SIZE_BYTES // (1024*1024)} MB",
+            message=f"File exceeds maximum size of {settings.MAX_FILE_SIZE_MB} MB",
         ))
     line_count = content.count(b"\n")
-    if line_count > MAX_ROW_COUNT:
+    if line_count > settings.MAX_CSV_ROW_COUNT:
         errors.append(ValidationError(
-            message=f"File exceeds maximum row count of {MAX_ROW_COUNT:,}",
+            message=f"File exceeds maximum row count of {settings.MAX_CSV_ROW_COUNT:,}",
         ))
     return errors
 

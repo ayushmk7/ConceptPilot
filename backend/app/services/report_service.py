@@ -8,18 +8,16 @@ Generates student reports with:
 """
 
 import uuid
-from datetime import datetime, timedelta
 from typing import Any, Optional
 
 import numpy as np
 
-from app.config import settings
 from app.services.graph_service import build_graph, get_topological_order
 
 
-def generate_student_token() -> str:
-    """Generate a 128-bit random UUID token for student report access."""
-    return str(uuid.uuid4())
+def generate_student_token() -> uuid.UUID:
+    """Return a new unique token for `StudentToken.token` (UUID column)."""
+    return uuid.uuid4()
 
 
 def build_student_report(
@@ -197,7 +195,3 @@ def _get_concept_label(graph_json: dict[str, Any], concept_id: str) -> str:
     return concept_id
 
 
-def is_token_expired(created_at: datetime) -> bool:
-    """Check if a student token has expired."""
-    expiry = created_at + timedelta(days=settings.STUDENT_TOKEN_EXPIRY_DAYS)
-    return datetime.utcnow() > expiry

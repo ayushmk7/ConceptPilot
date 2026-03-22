@@ -22,6 +22,7 @@
   --warning: #F59E0B;
   --danger: #DC2626;
   --info: #3B82F6;
+  --violet-600: #7c3aed;
 
   /* Readiness Heatmap */
   --readiness-0: #DC2626;
@@ -156,6 +157,46 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Design tokens (avoid arbitrary hex in components) */
+  --color-secondary-text: var(--secondary-text);
+  --color-muted-text: var(--muted-text);
+  --color-blue-tint: var(--blue-tint);
+  --color-michigan-blue: var(--michigan-blue);
+  --color-maize: var(--maize);
+  --color-light-blue-wash: var(--light-blue-wash);
+  --color-warm-white: var(--warm-white);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-readiness-0: var(--readiness-0);
+  --color-readiness-1: var(--readiness-1);
+  --color-readiness-2: var(--readiness-2);
+  --color-readiness-3: var(--readiness-3);
+  --color-readiness-4: var(--readiness-4);
+  --color-violet-600: var(--violet-600);
+}
+
+/* ── Animations ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 @layer base {
@@ -179,21 +220,24 @@
   h1 {
     font-size: 1.75rem;
     font-weight: 600;
-    line-height: 1.5;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
     color: var(--michigan-blue);
   }
 
   h2 {
     font-size: 1.375rem;
     font-weight: 600;
-    line-height: 1.5;
+    line-height: 1.35;
+    letter-spacing: -0.015em;
     color: var(--michigan-blue);
   }
 
   h3 {
     font-size: 1.125rem;
     font-weight: 600;
-    line-height: 1.5;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
     color: var(--michigan-blue);
   }
 
@@ -220,5 +264,89 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+}
+
+/* ── Utility classes ── */
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out both;
+}
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+.animate-pulse-soft {
+  animation: pulse-soft 3s ease-in-out infinite;
+}
+
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+
+.card-elevated {
+  background: #fff;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.card-elevated:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: var(--michigan-blue);
+  color: #fff;
+  padding: 0.5rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-primary:hover {
+  background: var(--blue-tint);
+  box-shadow: 0 2px 8px rgba(0,39,76,0.25);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-accent {
+  background: var(--maize);
+  color: var(--michigan-blue);
+  padding: 0.5rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-accent:hover {
+  background: #f0be00;
+  box-shadow: 0 2px 8px rgba(255,203,5,0.4);
+}
+
+.btn-outline {
+  border: 1px solid var(--michigan-blue);
+  color: var(--michigan-blue);
+  padding: 0.5rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.btn-outline:hover {
+  background: var(--light-blue-wash);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .animate-fade-in,
+  .animate-float,
+  .animate-pulse-soft {
+    animation: none !important;
   }
 }

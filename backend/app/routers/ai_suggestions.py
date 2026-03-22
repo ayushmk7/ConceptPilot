@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import (
     AISuggestion,
@@ -62,7 +61,6 @@ async def suggest_tags(
     exam_id: UUID,
     body: ConceptTagRequest,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Generate AI concept-tag suggestions for a question. Stored as pending review."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -74,7 +72,7 @@ async def suggest_tags(
         select(ConceptGraph)
         .where(ConceptGraph.exam_id == exam_id)
         .order_by(ConceptGraph.version.desc())
-        .limit(1)
+        .limit(1),
     )
     graph_row = g_result.scalar_one_or_none()
     if graph_row:
@@ -153,7 +151,6 @@ async def suggest_edges(
     exam_id: UUID,
     body: PrereqEdgeRequest,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Generate AI prerequisite-edge suggestions. Stored as pending review."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -164,7 +161,7 @@ async def suggest_edges(
         select(ConceptGraph)
         .where(ConceptGraph.exam_id == exam_id)
         .order_by(ConceptGraph.version.desc())
-        .limit(1)
+        .limit(1),
     )
     graph_row = g_result.scalar_one_or_none()
     graph_json = graph_row.graph_json if graph_row else {
@@ -242,7 +239,6 @@ async def draft_interventions(
     exam_id: UUID,
     body: InterventionDraftRequest,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Generate AI-drafted intervention suggestions. Stored as pending review."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -320,7 +316,6 @@ async def list_suggestions(
     suggestion_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """List AI suggestions for an exam, optionally filtered by type and status."""
     query = select(AISuggestion).where(AISuggestion.exam_id == exam_id)
@@ -337,7 +332,7 @@ async def list_suggestions(
     count_result = await db.execute(
         select(AISuggestion.status, func.count())
         .where(AISuggestion.exam_id == exam_id)
-        .group_by(AISuggestion.status)
+        .group_by(AISuggestion.status),
     )
     counts = dict(count_result.all())
 
@@ -376,7 +371,6 @@ async def review_suggestion(
     suggestion_id: UUID,
     body: SuggestionReviewAction,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Accept or reject a single AI suggestion."""
     result = await db.execute(
@@ -414,6 +408,17 @@ async def review_suggestion(
     return {"status": "ok", "suggestion_status": suggestion.status}
 
 
+@router.patch("/{exam_id}/ai/suggestions/{suggestion_id}")
+async def patch_suggestion(
+    exam_id: UUID,
+    suggestion_id: UUID,
+    body: SuggestionReviewAction,
+    db: AsyncSession = Depends(get_db),
+):
+    """Accept or reject a suggestion via PATCH (PRD §2.3.1 contract)."""
+    return await review_suggestion(exam_id, suggestion_id, body, db, _user)
+
+
 # ---------------------------------------------------------------------------
 # Bulk Review
 # ---------------------------------------------------------------------------
@@ -423,7 +428,6 @@ async def bulk_review(
     exam_id: UUID,
     body: BulkReviewRequest,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Accept or reject multiple suggestions at once."""
     result = await db.execute(
@@ -451,7 +455,7 @@ async def bulk_review(
         after_payload={
             "suggestion_ids": [str(sid) for sid in body.suggestion_ids],
             "updated": updated,
-        },
+        }
     )
     db.add(audit)
     await db.flush()
@@ -468,7 +472,6 @@ async def apply_suggestions(
     exam_id: UUID,
     body: ApplySuggestionsRequest,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Apply accepted suggestions to the actual data (graph/mapping).
 
@@ -524,7 +527,7 @@ async def _apply_edge_suggestion(
         select(ConceptGraph)
         .where(ConceptGraph.exam_id == exam_id)
         .order_by(ConceptGraph.version.desc())
-        .limit(1)
+        .limit(1),
     )
     graph_row = g_result.scalar_one_or_none()
     if not graph_row:

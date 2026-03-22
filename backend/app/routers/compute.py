@@ -7,10 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.config import settings
 from app.database import get_db
 from app.models.models import ComputeRun, Exam, InterventionResult, Parameter
+from app.rate_limit import enforce_instructor_write_limit
 from app.schemas.schemas import ComputeRequest, ComputeResponse, ComputeRunResponse
 from app.services.compute_queue_service import enqueue_compute_job
 from app.services.compute_runner_service import run_compute_pipeline_for_run
@@ -23,7 +23,7 @@ async def compute_readiness(
     exam_id: UUID,
     body: ComputeRequest = ComputeRequest(),
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
+    _rl: None = Depends(enforce_instructor_write_limit),
 ):
     """Run compute in sync mode or enqueue in async mode."""
     run_id = uuid.uuid4()
@@ -34,7 +34,7 @@ async def compute_readiness(
 
     # Load parameters (request body overrides stored defaults)
     p_result = await db.execute(
-        select(Parameter).where(Parameter.exam_id == exam_id)
+        select(Parameter).where(Parameter.exam_id == exam_id),
     )
     params = p_result.scalar_one_or_none()
     alpha = body.alpha if body.alpha != 1.0 else (params.alpha if params else 1.0)
@@ -51,7 +51,7 @@ async def compute_readiness(
         parameters_json={
             "alpha": alpha, "beta": beta, "gamma": gamma,
             "threshold": threshold, "k": k,
-        },
+        }
     )
     db.add(compute_run)
     await db.flush()
@@ -69,7 +69,7 @@ async def compute_readiness(
         if not queued:
             compute_run.status = "failed"
             compute_run.error_message = (
-                f"Unsupported queue backend: {settings.COMPUTE_QUEUE_BACKEND}"
+                f"Unsupported queue backend: {settings.COMPUTE_QUEUE_BACKEND}",
             )
             await db.flush()
             raise HTTPException(status_code=500, detail="Failed to enqueue compute job")
@@ -99,13 +99,12 @@ async def compute_readiness(
 async def list_compute_runs(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """List all compute runs for an exam, most recent first."""
     result = await db.execute(
         select(ComputeRun)
         .where(ComputeRun.exam_id == exam_id)
-        .order_by(ComputeRun.created_at.desc())
+        .order_by(ComputeRun.created_at.desc()),
     )
     runs = result.scalars().all()
     return [
@@ -127,17 +126,49 @@ async def list_compute_runs(
     ]
 
 
+@router.get("/{exam_id}/compute/runs/{run_id}", response_model=ComputeRunResponse)
+async def get_compute_run(
+    exam_id: UUID,
+    run_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a single compute run by its run_id."""
+    result = await db.execute(
+        select(ComputeRun).where(
+            ComputeRun.exam_id == exam_id,
+            ComputeRun.run_id == run_id,
+        )
+    )
+    r = result.scalar_one_or_none()
+    if not r:
+        raise HTTPException(status_code=404, detail="Compute run not found")
+
+    return ComputeRunResponse(
+        id=r.id,
+        run_id=r.run_id,
+        exam_id=r.exam_id,
+        status=r.status,
+        students_processed=r.students_processed,
+        concepts_processed=r.concepts_processed,
+        parameters=r.parameters_json,
+        graph_version=r.graph_version,
+        duration_ms=r.duration_ms,
+        error_message=r.error_message,
+        created_at=r.created_at,
+        completed_at=r.completed_at,
+    )
+
+
 @router.get("/{exam_id}/interventions")
 async def get_interventions(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Get ranked intervention recommendations from the latest compute run."""
     result = await db.execute(
         select(InterventionResult)
         .where(InterventionResult.exam_id == exam_id)
-        .order_by(InterventionResult.impact.desc())
+        .order_by(InterventionResult.impact.desc()),
     )
     interventions = result.scalars().all()
     return {

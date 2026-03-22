@@ -1,0 +1,83 @@
+/* ── Canvas entrance animation & transitions ── */
+
+/* 
+ * We use a transition on transform and opacity while the entry class is active.
+ * When the entrance class is removed, the transition is removed so dragging is instant.
+ */
+
+.canvas-entrance .react-flow__node {
+  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.8s ease-out !important;
+  opacity: 1;
+}
+
+.canvas-entrance-start .react-flow__node {
+  opacity: 0;
+}
+
+/* Edges: fade in after nodes */
+.canvas-entrance .react-flow__edge path {
+  transition: opacity 1s ease-out;
+  transition-delay: 0.3s;
+  opacity: 1;
+}
+
+.canvas-entrance-start .react-flow__edge path {
+  opacity: 0;
+}
+
+/* ── Ensure handles are never clipped by node content ── */
+.react-flow__node {
+  overflow: visible !important;
+}
+
+/* ── Node pop-in animation (for newly created nodes) ──
+ * Uses the standalone `scale` property so it does NOT override
+ * React Flow's inline `transform: translate(x, y)` positioning.
+ */
+@keyframes node-pop-in {
+  0% {
+    scale: 0.4;
+    opacity: 0;
+  }
+  50% {
+    scale: 1.08;
+    opacity: 1;
+  }
+  100% {
+    scale: 1;
+    opacity: 1;
+  }
+}
+
+.react-flow__node.node-pop-in {
+  animation: node-pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ── Invisible magnetic handles ──
+ * Handles are invisible by default but have a large interaction area
+ * so connections feel "magnetic." A subtle glow appears on hover.
+ */
+.react-flow__handle.magnetic-handle {
+  width: 18px !important;
+  height: 18px !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 4px !important;
+  opacity: 0 !important;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.react-flow__handle.magnetic-handle:hover {
+  opacity: 0.35 !important;
+  background: #00274C !important;
+  border-radius: 50% !important;
+}
+
+/* When actively connecting, highlight valid target handles */
+.react-flow__handle.magnetic-handle.connectingto,
+.react-flow__handle.magnetic-handle.valid {
+  opacity: 0.5 !important;
+  background: #FFCB05 !important;
+  border-radius: 50% !important;
+}
+
