@@ -23,34 +23,34 @@ interface BaseCurve {
   duration: number;
 }
 
-// Generate evenly-spaced curves from y=0 to y=660, every ~27px
-// All start well off-screen (x = -300) and end at bottom-right (1540, 680-720)
+// Generate evenly-spaced curves with varied endpoints and faster speeds
+// Endpoints are spread across different x (1300-1600) and y positions for randomness
 const baseCurves: BaseCurve[] = [
-  { d: 'M-300,0 C0,-40 400,40 750,80 S1200,270 1540,640', color: 'var(--maize)', baseOpacity: 0.35, delay: 0, duration: 10.0 },
-  { d: 'M-300,27 C0,-10 400,70 750,110 S1200,290 1540,650', color: 'var(--blue-tint)', baseOpacity: 0.28, delay: 0.5, duration: 10.5 },
-  { d: 'M-300,54 C0,15 400,100 750,140 S1200,310 1540,660', color: 'var(--maize)', baseOpacity: 0.32, delay: 1.1, duration: 10.0 },
-  { d: 'M-300,81 C0,40 400,130 750,170 S1200,335 1540,665', color: 'var(--blue-tint)', baseOpacity: 0.26, delay: 1.7, duration: 11.0 },
-  { d: 'M-300,108 C0,65 400,155 750,195 S1200,355 1540,670', color: 'var(--maize)', baseOpacity: 0.30, delay: 0.3, duration: 10.0 },
-  { d: 'M-300,135 C0,90 400,180 750,220 S1200,375 1540,675', color: 'var(--blue-tint)', baseOpacity: 0.24, delay: 2.2, duration: 11.2 },
-  { d: 'M-300,162 C0,115 400,205 750,245 S1200,395 1540,680', color: 'var(--maize)', baseOpacity: 0.28, delay: 0.8, duration: 10.2 },
-  { d: 'M-300,189 C0,142 400,232 750,272 S1200,415 1540,685', color: 'var(--blue-tint)', baseOpacity: 0.22, delay: 2.8, duration: 11.5 },
-  { d: 'M-300,216 C0,168 400,258 750,298 S1200,435 1540,688', color: 'var(--maize)', baseOpacity: 0.26, delay: 1.4, duration: 10.5 },
-  { d: 'M-300,243 C0,195 400,285 750,325 S1200,458 1540,690', color: 'var(--blue-tint)', baseOpacity: 0.20, delay: 3.4, duration: 12.0 },
-  { d: 'M-300,270 C0,222 400,312 750,352 S1200,478 1540,692', color: 'var(--maize)', baseOpacity: 0.24, delay: 0.5, duration: 10.0 },
-  { d: 'M-300,297 C0,248 400,338 750,378 S1200,498 1540,695', color: 'var(--blue-tint)', baseOpacity: 0.18, delay: 3.9, duration: 12.3 },
-  { d: 'M-300,324 C0,275 400,365 750,405 S1200,518 1540,697', color: 'var(--maize)', baseOpacity: 0.22, delay: 2.0, duration: 11.0 },
-  { d: 'M-300,351 C0,302 400,392 750,432 S1200,538 1540,698', color: 'var(--blue-tint)', baseOpacity: 0.16, delay: 4.5, duration: 12.6 },
-  { d: 'M-300,378 C0,328 400,418 750,458 S1200,558 1540,700', color: 'var(--maize)', baseOpacity: 0.20, delay: 1.1, duration: 10.5 },
-  { d: 'M-300,405 C0,355 400,445 750,485 S1200,578 1540,702', color: 'var(--blue-tint)', baseOpacity: 0.15, delay: 5.0, duration: 13.0 },
-  { d: 'M-300,432 C0,382 400,472 750,512 S1200,598 1540,704', color: 'var(--maize)', baseOpacity: 0.18, delay: 2.5, duration: 11.2 },
-  { d: 'M-300,459 C0,408 400,498 750,538 S1200,615 1540,706', color: 'var(--blue-tint)', baseOpacity: 0.14, delay: 5.6, duration: 13.3 },
-  { d: 'M-300,486 C0,435 400,525 750,565 S1200,632 1540,708', color: 'var(--maize)', baseOpacity: 0.16, delay: 3.1, duration: 12.0 },
-  { d: 'M-300,513 C0,462 400,552 750,592 S1200,648 1540,710', color: 'var(--blue-tint)', baseOpacity: 0.12, delay: 6.2, duration: 13.7 },
-  { d: 'M-300,540 C0,488 400,578 750,618 S1200,662 1540,712', color: 'var(--maize)', baseOpacity: 0.14, delay: 3.6, duration: 12.3 },
-  { d: 'M-300,567 C0,515 400,605 750,640 S1200,675 1540,714', color: 'var(--blue-tint)', baseOpacity: 0.10, delay: 6.7, duration: 14.0 },
-  { d: 'M-300,594 C0,542 400,632 750,660 S1200,688 1540,716', color: 'var(--maize)', baseOpacity: 0.12, delay: 4.2, duration: 12.6 },
-  { d: 'M-300,621 C0,568 400,658 750,680 S1200,698 1540,718', color: 'var(--blue-tint)', baseOpacity: 0.08, delay: 7.3, duration: 14.7 },
-  { d: 'M-300,648 C0,595 400,680 750,695 S1200,708 1540,720', color: 'var(--maize)', baseOpacity: 0.10, delay: 4.8, duration: 13.3 },
+  { d: 'M-300,0 C0,-40 400,40 750,80 S1200,270 1580,520', color: 'var(--maize)', baseOpacity: 0.35, delay: 0, duration: 4.2 },
+  { d: 'M-300,27 C0,-10 400,70 750,110 S1200,290 1420,710', color: 'var(--blue-tint)', baseOpacity: 0.28, delay: 0.3, duration: 4.8 },
+  { d: 'M-300,54 C0,15 400,100 750,140 S1200,310 1540,580', color: 'var(--maize)', baseOpacity: 0.32, delay: 0.7, duration: 4.0 },
+  { d: 'M-300,81 C0,40 400,130 750,170 S1200,335 1350,690', color: 'var(--blue-tint)', baseOpacity: 0.26, delay: 1.0, duration: 5.2 },
+  { d: 'M-300,108 C0,65 400,155 750,195 S1200,355 1600,480', color: 'var(--maize)', baseOpacity: 0.30, delay: 0.2, duration: 4.5 },
+  { d: 'M-300,135 C0,90 400,180 750,220 S1200,375 1460,640', color: 'var(--blue-tint)', baseOpacity: 0.24, delay: 1.3, duration: 5.0 },
+  { d: 'M-300,162 C0,115 400,205 750,245 S1200,395 1520,550', color: 'var(--maize)', baseOpacity: 0.28, delay: 0.5, duration: 4.3 },
+  { d: 'M-300,189 C0,142 400,232 750,272 S1200,415 1380,720', color: 'var(--blue-tint)', baseOpacity: 0.22, delay: 1.6, duration: 5.4 },
+  { d: 'M-300,216 C0,168 400,258 750,298 S1200,435 1560,500', color: 'var(--maize)', baseOpacity: 0.26, delay: 0.8, duration: 4.6 },
+  { d: 'M-300,243 C0,195 400,285 750,325 S1200,458 1440,670', color: 'var(--blue-tint)', baseOpacity: 0.20, delay: 1.9, duration: 5.1 },
+  { d: 'M-300,270 C0,222 400,312 750,352 S1200,478 1600,540', color: 'var(--maize)', baseOpacity: 0.24, delay: 0.3, duration: 4.2 },
+  { d: 'M-300,297 C0,248 400,338 750,378 S1200,498 1330,700', color: 'var(--blue-tint)', baseOpacity: 0.18, delay: 2.1, duration: 5.6 },
+  { d: 'M-300,324 C0,275 400,365 750,405 S1200,518 1500,580', color: 'var(--maize)', baseOpacity: 0.22, delay: 1.1, duration: 4.8 },
+  { d: 'M-300,351 C0,302 400,392 750,432 S1200,538 1400,650', color: 'var(--blue-tint)', baseOpacity: 0.16, delay: 2.4, duration: 5.3 },
+  { d: 'M-300,378 C0,328 400,418 750,458 S1200,558 1580,510', color: 'var(--maize)', baseOpacity: 0.20, delay: 0.6, duration: 4.4 },
+  { d: 'M-300,405 C0,355 400,445 750,485 S1200,578 1360,730', color: 'var(--blue-tint)', baseOpacity: 0.15, delay: 2.7, duration: 5.8 },
+  { d: 'M-300,432 C0,382 400,472 750,512 S1200,598 1540,560', color: 'var(--maize)', baseOpacity: 0.18, delay: 1.4, duration: 4.6 },
+  { d: 'M-300,459 C0,408 400,498 750,538 S1200,615 1420,680', color: 'var(--blue-tint)', baseOpacity: 0.14, delay: 3.0, duration: 5.5 },
+  { d: 'M-300,486 C0,435 400,525 750,565 S1200,632 1600,490', color: 'var(--maize)', baseOpacity: 0.16, delay: 1.7, duration: 4.8 },
+  { d: 'M-300,513 C0,462 400,552 750,592 S1200,648 1350,710', color: 'var(--blue-tint)', baseOpacity: 0.12, delay: 3.3, duration: 5.9 },
+  { d: 'M-300,540 C0,488 400,578 750,618 S1200,662 1520,550', color: 'var(--maize)', baseOpacity: 0.14, delay: 2.0, duration: 4.5 },
+  { d: 'M-300,567 C0,515 400,605 750,640 S1200,675 1460,660', color: 'var(--blue-tint)', baseOpacity: 0.10, delay: 3.5, duration: 6.0 },
+  { d: 'M-300,594 C0,542 400,632 750,660 S1200,688 1580,530', color: 'var(--maize)', baseOpacity: 0.12, delay: 2.3, duration: 5.0 },
+  { d: 'M-300,621 C0,568 400,658 750,680 S1200,698 1390,740', color: 'var(--blue-tint)', baseOpacity: 0.08, delay: 3.8, duration: 6.2 },
+  { d: 'M-300,648 C0,595 400,680 750,695 S1200,708 1540,600', color: 'var(--maize)', baseOpacity: 0.10, delay: 2.6, duration: 5.2 },
 ];
 
 // Each curve spawns a leader + 2 followers for the "pack" trailing effect

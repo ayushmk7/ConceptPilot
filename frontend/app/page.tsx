@@ -6,6 +6,7 @@ import { SplitText } from '@/components/animations/SplitText';
 import { StreakingLines } from '@/components/animations/StreakingLines';
 import BlurText from '@/components/animations/BlurText';
 import { BlurFadeIn } from '@/components/animations/BlurFadeIn';
+import { ScrollIndicator } from '@/components/ScrollIndicator';
 
 
 export default function LandingPage() {
@@ -49,7 +50,7 @@ export default function LandingPage() {
             <BlurFadeIn delay={1.2} duration={0.6} direction="bottom" blur={10}>
               <Link
                 href="/dashboard"
-                className="group inline-flex items-center gap-2.5 px-7 py-3 rounded-full bg-accent text-primary font-semibold text-base hover:shadow-lg hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:bg-accent/90 transition-all"
+                className="group inline-flex items-center gap-2.5 px-7 py-3 rounded-full bg-transparent border-2 border-accent text-white font-semibold text-base hover:bg-accent/10 hover:shadow-lg hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:bg-accent/20 transition-all"
               >
                 <ShieldCheck className="w-5 h-5" />
                 Instructors
@@ -68,13 +69,15 @@ export default function LandingPage() {
               </Link>
             </BlurFadeIn>
           </div>
+
+          <ScrollIndicator targetId="features" />
         </div>
 
         <WaveDivider fill="var(--background)" />
       </div>
 
       {/* Features — side-by-side split for instructor/student */}
-      <div className="pt-20 pb-16">
+      <div id="features" className="pt-20 pb-16">
         <div className="text-center mb-14 px-6 animate-fade-in-up">
           <h2 className="text-2xl font-semibold text-primary mb-3">Two experiences, one platform</h2>
           <p className="text-secondary-text max-w-xl mx-auto">
