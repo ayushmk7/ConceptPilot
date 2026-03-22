@@ -33,13 +33,13 @@ export const ArtifactNode = memo(({ data }: any) => {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-lg w-[420px]">
+    <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg w-[420px]">
       <Handle type="target" position={Position.Left} id="left" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
       <Handle type="source" position={Position.Right} id="right" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
       <Handle type="target" position={Position.Top} id="top" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
       <Handle type="source" position={Position.Bottom} id="bottom" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
 
-      <div className="h-10 bg-[#1E1E2E] rounded-t-lg px-4 flex items-center justify-between">
+      <div className="h-10 bg-[#1E1E2E] rounded-t-xl px-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Code className="w-4 h-4 text-[#7C3AED]" />
           <span className="text-sm font-medium text-white">{data.title}</span>
@@ -69,7 +69,7 @@ export const ArtifactNode = memo(({ data }: any) => {
         </div>
       </div>
 
-      <div className="bg-[#1E1E2E] p-4 rounded-b-lg max-h-[400px] overflow-y-auto nowheel nodrag">
+      <div className="bg-[#1E1E2E] p-4 rounded-b-xl max-h-[400px] overflow-y-auto nowheel nodrag">
         {data.content ? (
           <pre className="text-sm text-[#D4D4D8] font-mono whitespace-pre-wrap break-words">
             <code>{data.content}</code>

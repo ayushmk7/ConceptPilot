@@ -29,22 +29,24 @@ export function MessageBubble({
   const [hovered, setHovered] = useState(false);
   return (
     <div
-      className={`group flex ${isUser ? 'justify-end' : 'justify-start'} relative`}
+      className={`group flex ${isUser ? 'justify-end' : 'justify-start'} relative ${
+        branchMode === 'manual' && onToggleSelect ? 'cursor-pointer hover:bg-[#F1F5F9] -mx-1 px-1 py-0.5 rounded-lg transition-colors' : ''
+      }`}
+      onClick={branchMode === 'manual' && onToggleSelect ? () => onToggleSelect(index) : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {/* Selection checkbox in manual branch mode */}
       {branchMode === 'manual' && onToggleSelect && (
-        <button
-          onClick={() => onToggleSelect(index)}
+        <div
           className={`self-start mt-1 mr-1.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
             isSelected
               ? 'bg-[#00274C] border-[#00274C] text-white'
-              : 'border-[#CBD5E1] hover:border-[#00274C]'
+              : 'border-[#CBD5E1] group-hover:border-[#00274C]'
           }`}
         >
           {isSelected && <Check className="w-3 h-3" />}
-        </button>
+        </div>
       )}
 
       <div

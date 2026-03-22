@@ -26,7 +26,7 @@ export const ImageNode = memo(({ data }: any) => {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-lg w-[350px]">
+    <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg w-[350px]">
       <Handle type="target" position={Position.Left} className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
       <Handle type="source" position={Position.Right} className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
 

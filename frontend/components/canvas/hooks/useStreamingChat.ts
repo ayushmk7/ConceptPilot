@@ -21,7 +21,7 @@ interface UseStreamingChatReturn {
   isLoading: boolean;
   error: string | null;
   sessionId: string | null;
-  send: (text: string) => Promise<void>;
+  send: (text: string, context?: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -54,14 +54,16 @@ export function useStreamingChat(
   }, []);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, context?: string) => {
       setError(null);
       setMessages((prev) => [...prev, { role: 'user', content: text }]);
       setIsLoading(true);
 
+      const messageForApi = context ? `${context}\n\n${text}` : text;
+
       try {
         const sid = await ensureSession();
-        const res = await sendMessage(sid, text);
+        const res = await sendMessage(sid, messageForApi);
         setMessages((prev) => [
           ...prev,
           { role: 'assistant', content: res.assistant_message },

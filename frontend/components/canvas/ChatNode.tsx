@@ -2,13 +2,14 @@ import { memo, useCallback, useState } from 'react';
 import { Handle, Position, NodeResizeControl } from '@xyflow/react';
 import {
   Minimize2,
-  MoreVertical,
+  Maximize2,
   AlertCircle,
   GitBranch,
   Zap,
   Hand,
   Check,
   X,
+  Link2,
 } from 'lucide-react';
 
 import { MessageList } from './chat/MessageList';
@@ -33,6 +34,11 @@ export const ChatNode = memo(({ id, data }: any) => {
 
   const initialMessages: LocalMessage[] | undefined = data.initialMessages;
   const onBranchCreate: OnBranchCreate | undefined = data.onBranchCreate;
+  const onBranchPlaceStart: OnBranchCreate | undefined = data.onBranchPlaceStart;
+  const onFocusNode: ((nodeId: string) => void) | undefined = data.onFocusNode;
+  const onLinkStart: ((nodeId: string, messages: LocalMessage[]) => void) | undefined = data.onLinkStart;
+  const onDeleteNode: ((nodeId: string) => void) | undefined = data.onDeleteNode;
+  const linkedContext: LocalMessage[] | undefined = data.linkedContext;
   const autoBranch: boolean = data.autoBranch ?? false;
 
   const { messages, isLoading, error, send, clearError } = useStreamingChat(
@@ -52,15 +58,20 @@ export const ChatNode = memo(({ id, data }: any) => {
     [messages, id, onBranchCreate],
   );
 
-  /** Manual branch: branch with all selected messages. */
+  /** Manual branch: branch with all selected messages (enters placement mode). */
   const handleManualBranch = useCallback(() => {
-    if (!onBranchCreate || selectedIndices.size === 0) return;
+    if (selectedIndices.size === 0) return;
     const sorted = Array.from(selectedIndices).sort((a, b) => a - b);
     const picked = sorted.map((i) => messages[i]);
-    onBranchCreate(id, picked);
+    // Prefer placement mode; fall back to instant creation
+    if (onBranchPlaceStart) {
+      onBranchPlaceStart(id, picked);
+    } else if (onBranchCreate) {
+      onBranchCreate(id, picked);
+    }
     setBranchMode('off');
     setSelectedIndices(new Set());
-  }, [messages, id, selectedIndices, onBranchCreate]);
+  }, [messages, id, selectedIndices, onBranchCreate, onBranchPlaceStart]);
 
   /** Toggle a message's selection in manual mode. */
   const toggleSelect = useCallback((index: number) => {
@@ -75,7 +86,14 @@ export const ChatNode = memo(({ id, data }: any) => {
   /** Auto-branch: after each assistant response, auto-create a branch node. */
   const handleSend = useCallback(
     async (text: string) => {
-      await send(text);
+      let context: string | undefined;
+      if (linkedContext && linkedContext.length > 0) {
+        const contextStr = linkedContext
+          .map((m) => `[${m.role}]: ${m.content}`)
+          .join('\n');
+        context = `[Background context from linked conversation:\n${contextStr}\n]`;
+      }
+      await send(text, context);
       if (autoBranch && onBranchCreate) {
         // Defer so the new message is in state
         setTimeout(() => {
@@ -83,7 +101,7 @@ export const ChatNode = memo(({ id, data }: any) => {
         }, 0);
       }
     },
-    [send, autoBranch, onBranchCreate],
+    [send, linkedContext, autoBranch, onBranchCreate],
   );
 
   // ---- Collapsed view ----
@@ -93,10 +111,10 @@ export const ChatNode = memo(({ id, data }: any) => {
         onClick={() => setIsExpanded(true)}
         className="px-4 py-2.5 bg-white rounded-full border border-[#E2E8F0] shadow-md cursor-pointer hover:border-[#00274C] transition-all min-w-[140px]"
       >
-        <Handle type="target" position={Position.Left} id="left" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-        <Handle type="source" position={Position.Right} id="right" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-        <Handle type="target" position={Position.Top} id="top" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-        <Handle type="source" position={Position.Bottom} id="bottom" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
+        <Handle type="target" position={Position.Left} id="left" className="magnetic-handle" />
+        <Handle type="source" position={Position.Right} id="right" className="magnetic-handle" />
+        <Handle type="target" position={Position.Top} id="top" className="magnetic-handle" />
+        <Handle type="source" position={Position.Bottom} id="bottom" className="magnetic-handle" />
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[#FFCB05]" />
           <span className="text-sm font-medium text-[#1A1A2E]">{data.title}</span>
@@ -109,14 +127,14 @@ export const ChatNode = memo(({ id, data }: any) => {
   // ---- Expanded view ----
   return (
     <div
-      className="bg-white rounded-lg border border-[#E2E8F0] shadow-lg flex flex-col relative overflow-hidden"
+      className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg relative"
       style={{ width: '100%', height: '100%', minWidth: 320, minHeight: 360 }}
     >
-      {/* Handles: left/right + top/bottom for dynamic routing */}
-      <Handle type="target" position={Position.Left} id="left" className="!w-6 !h-6 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-      <Handle type="source" position={Position.Right} id="right" className="!w-6 !h-6 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-      <Handle type="target" position={Position.Top} id="top" className="!w-6 !h-6 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-      <Handle type="source" position={Position.Bottom} id="bottom" className="!w-6 !h-6 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
+      {/* Invisible magnetic handles — styled via CSS class */}
+      <Handle type="target" position={Position.Left} id="left" className="magnetic-handle" />
+      <Handle type="source" position={Position.Right} id="right" className="magnetic-handle" />
+      <Handle type="target" position={Position.Top} id="top" className="magnetic-handle" />
+      <Handle type="source" position={Position.Bottom} id="bottom" className="magnetic-handle" />
 
       {/* Resize handle — bottom-right corner */}
       <NodeResizeControl
@@ -143,84 +161,121 @@ export const ChatNode = memo(({ id, data }: any) => {
         </svg>
       </NodeResizeControl>
 
-      {/* ── Header ── */}
-      <div className="h-10 bg-[#00274C] rounded-t-lg px-4 flex items-center justify-between shrink-0">
-        <input
-          type="text"
-          defaultValue={data.title}
-          className="bg-transparent text-white text-sm font-medium outline-none flex-1 min-w-0"
-        />
-        <div className="flex items-center gap-1.5 shrink-0">
-          <SkillPicker currentSkill={skill} onSelect={setSkill} />
+      {/* Content wrapper — clips overflow so node never auto-grows */}
+      <div className="absolute inset-0 flex flex-col overflow-hidden rounded-xl">
 
-          {/* Branch menu trigger */}
-          <div className="relative">
-            <button
-              onClick={() => setShowBranchMenu((v) => !v)}
-              className={`p-1 rounded transition-colors ${
-                branchMode !== 'off'
-                  ? 'bg-[#FFCB05] text-[#00274C]'
-                  : 'hover:bg-white/10 text-white'
-              }`}
-              title="Branching options"
-            >
-              <GitBranch className="w-3.5 h-3.5" />
-            </button>
+      {/* ── Title bar ── */}
+      <div className="bg-[#00274C] rounded-t-xl flex flex-col shrink-0">
+        {/* Top row: window controls */}
+        <div className="flex items-center justify-between h-8 pl-3 pr-0">
+          <div className="flex items-center gap-1.5">
+            <SkillPicker currentSkill={skill} onSelect={setSkill} />
 
-            {showBranchMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowBranchMenu(false)} />
-                <div className="absolute top-full mt-1 right-0 z-50 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-1 min-w-[200px]">
-                  <button
-                    onClick={() => {
-                      const next = !autoBranch;
-                      // Toggle auto-branch via data mutation (parent reads this)
-                      data.autoBranch = next;
-                      setShowBranchMenu(false);
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-[#E8EEF4] transition-colors flex items-center gap-2"
-                  >
-                    <Zap className={`w-4 h-4 ${autoBranch ? 'text-[#FFCB05]' : 'text-[#94A3B8]'}`} />
-                    <div>
-                      <div className="text-sm text-[#1A1A2E]">Auto Branch</div>
-                      <div className="text-xs text-[#94A3B8]">
-                        {autoBranch ? 'ON — new node per response' : 'Create a node for each AI response'}
+            {/* Branch menu trigger */}
+            <div className="relative">
+              <button
+                onClick={() => setShowBranchMenu((v) => !v)}
+                className={`p-1 rounded transition-colors ${
+                  branchMode !== 'off'
+                    ? 'bg-[#FFCB05] text-[#00274C]'
+                    : 'hover:bg-white/10 text-white'
+                }`}
+                title="Branching options"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+              </button>
+
+              {showBranchMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowBranchMenu(false)} />
+                  <div className="absolute top-full mt-1 left-0 z-50 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-1 min-w-[200px]">
+                    <button
+                      onClick={() => {
+                        const next = !autoBranch;
+                        data.autoBranch = next;
+                        setShowBranchMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-[#E8EEF4] transition-colors flex items-center gap-2"
+                    >
+                      <Zap className={`w-4 h-4 ${autoBranch ? 'text-[#FFCB05]' : 'text-[#94A3B8]'}`} />
+                      <div>
+                        <div className="text-sm text-[#1A1A2E]">Auto Branch</div>
+                        <div className="text-xs text-[#94A3B8]">
+                          {autoBranch ? 'ON — new node per response' : 'Create a node for each AI response'}
+                        </div>
                       </div>
-                    </div>
-                    {autoBranch && <Check className="w-4 h-4 text-[#16A34A] ml-auto" />}
-                  </button>
+                      {autoBranch && <Check className="w-4 h-4 text-[#16A34A] ml-auto" />}
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      setBranchMode(branchMode === 'manual' ? 'off' : 'manual');
-                      setSelectedIndices(new Set());
-                      setShowBranchMenu(false);
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-[#E8EEF4] transition-colors flex items-center gap-2"
-                  >
-                    <Hand className={`w-4 h-4 ${branchMode === 'manual' ? 'text-[#00274C]' : 'text-[#94A3B8]'}`} />
-                    <div>
-                      <div className="text-sm text-[#1A1A2E]">Manual Branch</div>
-                      <div className="text-xs text-[#94A3B8]">
-                        Select specific messages to branch
+                    <button
+                      onClick={() => {
+                        setBranchMode(branchMode === 'manual' ? 'off' : 'manual');
+                        setSelectedIndices(new Set());
+                        setShowBranchMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-[#E8EEF4] transition-colors flex items-center gap-2"
+                    >
+                      <Hand className={`w-4 h-4 ${branchMode === 'manual' ? 'text-[#00274C]' : 'text-[#94A3B8]'}`} />
+                      <div>
+                        <div className="text-sm text-[#1A1A2E]">Manual Branch</div>
+                        <div className="text-xs text-[#94A3B8]">
+                          Select specific messages to branch
+                        </div>
                       </div>
-                    </div>
-                    {branchMode === 'manual' && <Check className="w-4 h-4 text-[#16A34A] ml-auto" />}
-                  </button>
-                </div>
-              </>
+                      {branchMode === 'manual' && <Check className="w-4 h-4 text-[#16A34A] ml-auto" />}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Link button */}
+            {onLinkStart && (
+              <button
+                onClick={() => onLinkStart(id, messages)}
+                className="p-1 hover:bg-white/10 rounded transition-colors"
+                title="Link to another node"
+              >
+                <Link2 className="w-3.5 h-3.5 text-white" />
+              </button>
             )}
           </div>
 
-          <button
-            onClick={() => setIsExpanded(false)}
-            className="p-1 hover:bg-white/10 rounded transition-colors"
-          >
-            <Minimize2 className="w-3.5 h-3.5 text-white" />
-          </button>
-          <button className="p-1 hover:bg-white/10 rounded transition-colors">
-            <MoreVertical className="w-3.5 h-3.5 text-white" />
-          </button>
+          {/* Window controls — minimize · maximize · close */}
+          <div className="flex items-stretch h-full">
+            <button
+              onClick={() => setIsExpanded(false)}
+              className="w-10 flex items-center justify-center hover:bg-white/15 transition-colors"
+              title="Minimize"
+            >
+              <Minimize2 className="w-3.5 h-3.5 text-white/80" />
+            </button>
+            {onFocusNode && (
+              <button
+                onClick={() => onFocusNode(id)}
+                className="w-10 flex items-center justify-center hover:bg-white/15 transition-colors"
+                title="Maximize"
+              >
+                <Maximize2 className="w-3.5 h-3.5 text-white/80" />
+              </button>
+            )}
+            <button
+              onClick={() => onDeleteNode?.(id)}
+              className="w-10 flex items-center justify-center hover:bg-red-500 transition-colors rounded-tr-xl"
+              title="Close"
+            >
+              <X className="w-3.5 h-3.5 text-white/80" />
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom row: title */}
+        <div className="px-3 pb-2">
+          <input
+            type="text"
+            defaultValue={data.title}
+            className="bg-transparent text-white text-sm font-medium outline-none w-full min-w-0"
+          />
         </div>
       </div>
 
@@ -263,6 +318,14 @@ export const ChatNode = memo(({ id, data }: any) => {
         </div>
       )}
 
+      {/* ── Linked context indicator ── */}
+      {linkedContext && linkedContext.length > 0 && (
+        <div className="px-3 py-1.5 bg-purple-50 border-b border-purple-200 flex items-center gap-2 text-xs text-purple-700 shrink-0">
+          <Link2 className="w-3.5 h-3.5 shrink-0" />
+          <span>Linked context: {linkedContext.length} messages from connected node</span>
+        </div>
+      )}
+
       {/* ── Scrollable message area ── */}
       <MessageList
         messages={messages}
@@ -273,18 +336,10 @@ export const ChatNode = memo(({ id, data }: any) => {
         onToggleSelect={toggleSelect}
       />
 
-      {/* ── Progress bar ── */}
-      <div className="px-3 pt-2 shrink-0">
-        <div className="h-1 bg-[#E2E8F0] rounded-full">
-          <div
-            className="h-full bg-[#16A34A] rounded-full transition-all"
-            style={{ width: `${Math.min(100, messages.length * 10)}%` }}
-          />
-        </div>
-      </div>
-
       {/* ── Input ── */}
       <MessageInput onSend={handleSend} disabled={isLoading} />
+
+      </div>{/* end content wrapper */}
     </div>
   );
 });
