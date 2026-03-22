@@ -41,11 +41,14 @@ import {
   saveCanvasProject,
   updateStudentCanvasWorkspace,
   infGetProject,
+  infGetMessages,
   infCreateNode,
   infCreateEdge,
   infDeleteNode,
   infUpdateNode,
   infJoinSession,
+  infUploadFile,
+  infDeleteEdge,
   type CanvasProject,
   type InfCanvasNode as ApiNode,
   type InfCanvasEdge as ApiEdge,
@@ -92,6 +95,7 @@ function apiNodeToRF(node: ApiNode, cb: NodeCallbacks): Node {
     title: node.title,
     skill: node.skill ?? 'Tutor',
     messages: [],
+    ...(node.content !== undefined ? { content: node.content } : {}),
   };
   if (node.type === 'chat') {
     data.onBranchCreate = cb.onBranchCreate;
@@ -102,6 +106,8 @@ function apiNodeToRF(node: ApiNode, cb: NodeCallbacks): Node {
     data.onToolResult = cb.onToolResult;
     data.sessionId = cb.sessionId;
     data.autoBranch = false;
+  } else if (node.type === 'artifact') {
+    data.onDeleteNode = cb.onDeleteNode;
   }
   return {
     id: node.id,
@@ -163,6 +169,19 @@ function CanvasPageInner() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  const handleEdgesChange = useCallback(
+    (changes: Parameters<typeof onEdgesChange>[0]) => {
+      onEdgesChange(changes);
+      changes.forEach((change) => {
+        if (change.type === 'remove' && !change.id.startsWith('local-')) {
+          infDeleteEdge(change.id).catch(() => { /* ignore */ });
+        }
+      });
+    },
+    [onEdgesChange],
+  );
+
   const [workspaceName, setWorkspaceName] = useState('Untitled Workspace');
   const [showSettings, setShowSettings] = useState(false);
   const [viewMode, setViewMode] = useState<'canvas' | 'linear'>('canvas');
@@ -584,6 +603,9 @@ function CanvasPageInner() {
             },
           };
         }
+        if (n.type === 'artifact') {
+          return { ...n, data: { ...n.data, onDeleteNode: handleDeleteNode } };
+        }
         return n;
       }),
     );
@@ -763,6 +785,23 @@ function CanvasPageInner() {
 
         if (project.nodes.length > 0) {
           setNodes(project.nodes.map((n) => apiNodeToRF(n, callbacks)));
+          // For artifact nodes missing content (backend may not have returned it),
+          // fetch their messages separately and patch data.content in.
+          for (const n of project.nodes) {
+            if (n.type === 'artifact' && !n.content) {
+              infGetMessages(n.id).then((msgs) => {
+                if (cancelled) return;
+                const last = [...msgs].reverse().find((m) => m.role === 'assistant');
+                if (last?.content) {
+                  setNodes((prev) =>
+                    prev.map((p) =>
+                      p.id === n.id ? { ...p, data: { ...p.data, content: last.content } } : p,
+                    ),
+                  );
+                }
+              }).catch(() => {});
+            }
+          }
         } else {
           // New project — create a real node so messages don't 404
           const startX = typeof window !== 'undefined' ? window.innerWidth / 2 - 210 : 300;
@@ -957,6 +996,13 @@ function CanvasPageInner() {
         ),
       );
     },
+    onNodeSkillChanged: (nodeId, skill) => {
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === nodeId ? { ...n, data: { ...n.data, skill } } : n,
+        ),
+      );
+    },
   });
 
   /* ── Connect handler ── */
@@ -982,15 +1028,64 @@ function CanvasPageInner() {
   }, []);
 
   /* ── Files handlers ── */
-  const handleUploadFiles = useCallback((fileList: FileList) => {
-    const newFiles: CanvasFile[] = Array.from(fileList).map((f) => ({
-      id: `file-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      name: f.name,
-      type: f.type,
-      size: f.size,
-    }));
-    setFiles((prev) => [...prev, ...newFiles]);
-  }, []);
+  const handleUploadFiles = useCallback(async (fileList: FileList) => {
+    const arr = Array.from(fileList);
+    // Pick a chat node to auto-connect to: prefer the focused one, else first chat node
+    const targetChatNode =
+      nodesRef.current.find((n) => n.id === activeFocusNodeId && n.type === 'chat') ??
+      nodesRef.current.find((n) => n.type === 'chat');
+
+    for (let i = 0; i < arr.length; i++) {
+      const file = arr[i];
+      try {
+        const result = await infUploadFile(projectId, file);
+        setFiles((prev) => [
+          ...prev,
+          { id: result.file_id, name: file.name, type: file.type, size: file.size },
+        ]);
+
+        // Position the file node to the left of the target chat node
+        const pos = targetChatNode
+          ? { x: targetChatNode.position.x - 300, y: targetChatNode.position.y + i * 120 }
+          : { x: 150 + i * 280, y: 300 };
+
+        const rfNode = {
+          id: result.node_id,
+          type: result.type,
+          position: pos,
+          data: { title: file.name },
+        };
+        setNodes((prev) => [...prev, rfNode]);
+
+        // Auto-connect file node → chat node so context assembly picks it up immediately
+        if (targetChatNode) {
+          const edgeId = `file-${result.node_id}-${targetChatNode.id}`;
+          setEdges((prev) => [
+            ...prev,
+            {
+              id: edgeId,
+              source: result.node_id,
+              target: targetChatNode.id,
+              type: 'smart',
+              animated: true,
+              style: { stroke: '#CBD5E1', strokeWidth: 2 },
+            },
+          ]);
+          infCreateEdge(projectId, result.node_id, targetChatNode.id).catch(() => {});
+        }
+      } catch {
+        setFiles((prev) => [
+          ...prev,
+          {
+            id: `file-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+          },
+        ]);
+      }
+    }
+  }, [projectId, setNodes, setEdges, activeFocusNodeId]);
 
   const handleRemoveFile = useCallback((id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
@@ -1012,6 +1107,22 @@ function CanvasPageInner() {
   /* ── Render ── */
   return (
     <div className="h-full w-full bg-[#FAFBFC] relative">
+      {/* Presence indicator — top-right corner */}
+      {users.length > 0 && (
+        <div className="absolute top-4 right-4 z-[100] flex items-center gap-1.5">
+          {users.map((u) => (
+            <div
+              key={u.sessionId}
+              title={u.name}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md border-2 border-white"
+              style={{ backgroundColor: u.color }}
+            >
+              {u.name.charAt(0).toUpperCase()}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Back — z above canvas scrims; preserve student ?role=student */}
       <div className="absolute top-4 left-4 z-[100] flex flex-col gap-1.5 items-start">
         <button
@@ -1084,7 +1195,7 @@ function CanvasPageInner() {
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onEdgesChange={handleEdgesChange}
             onConnect={onConnect}
             onInit={handleFlowInit}
             onPaneClick={onPaneClick}

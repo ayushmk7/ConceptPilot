@@ -1,14 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 const SKILLS = [
-  { id: 'tutor', label: 'Tutor', description: 'General study help and Q&A' },
-  { id: 'quiz', label: 'Quiz', description: 'Generate practice questions' },
-  { id: 'summarize', label: 'Summarize', description: 'Condense notes and readings' },
-  { id: 'explain', label: 'Explain', description: 'Break down complex concepts' },
-  { id: 'debug', label: 'Debug', description: 'Help fix code or logic errors' },
+  { id: 'Tutor', label: 'Tutor', description: 'Patient step-by-step guidance' },
+  { id: 'Socratic', label: 'Socratic', description: 'Questions that lead you to answers' },
+  { id: 'Research Assistant', label: 'Researcher', description: 'Summarize and synthesize info' },
 ] as const;
 
 interface SkillPickerProps {
@@ -18,12 +16,23 @@ interface SkillPickerProps {
 
 export function SkillPicker({ currentSkill, onSelect }: SkillPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const active = SKILLS.find((s) => s.id === currentSkill.toLowerCase()) ?? SKILLS[0];
+  const active = SKILLS.find((s) => s.id === currentSkill) ?? SKILLS[0];
+
+  // Compute position after the button is in its final painted position
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+  }, [isOpen]);
 
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1 px-2 py-0.5 bg-accent text-primary rounded text-xs font-medium hover:bg-accent/80 transition-colors whitespace-nowrap"
       >
@@ -31,10 +40,13 @@ export function SkillPicker({ currentSkill, onSelect }: SkillPickerProps) {
         <ChevronDown className="w-3 h-3" />
       </button>
 
-      {isOpen && (
+      {isOpen && pos && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-full mt-1 left-0 z-50 bg-white rounded-lg shadow-lg border border-border py-1 min-w-[220px]">
+          <div className="fixed inset-0 z-[9998]" onClick={() => setIsOpen(false)} />
+          <div
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+            className="bg-white rounded-lg shadow-lg border border-border py-1 min-w-[220px]"
+          >
             {SKILLS.map((skill) => (
               <button
                 key={skill.id}

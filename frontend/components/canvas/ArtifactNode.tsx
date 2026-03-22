@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
-import { Handle, Position } from '@xyflow/react';
-import { Code, Minimize2, Copy, Check, Download } from 'lucide-react';
+import { Handle, Position, useReactFlow } from '@xyflow/react';
+import { Code, Minimize2, Copy, Check, Download, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -19,9 +19,19 @@ function deriveFilename(title: string, language?: string): string {
   return `${slug}.${ext}`;
 }
 
-export const ArtifactNode = memo(({ data }: any) => {
+export const ArtifactNode = memo(({ id, data }: any) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
+  const { deleteElements } = useReactFlow();
+
+  const handleDelete = () => {
+    deleteElements({ nodes: [{ id }] });
+    if (!id.startsWith('local-')) {
+      import('@/lib/canvas-api').then(({ infDeleteNode }) => {
+        infDeleteNode(id).catch(() => {});
+      });
+    }
+  };
 
   const copyContent = () => {
     if (data.content) {
@@ -105,6 +115,13 @@ export const ArtifactNode = memo(({ data }: any) => {
             title="Minimize"
           >
             <Minimize2 className="w-3.5 h-3.5 text-white/70" />
+          </button>
+          <button
+            onClick={handleDelete}
+            className="p-1 hover:bg-red-500 rounded transition-colors"
+            title="Delete"
+          >
+            <X className="w-3.5 h-3.5 text-white/70" />
           </button>
         </div>
       </div>

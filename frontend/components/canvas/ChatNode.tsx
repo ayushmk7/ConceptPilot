@@ -16,6 +16,7 @@ import { MessageList } from './chat/MessageList';
 import { MessageInput } from './chat/MessageInput';
 import { SkillPicker } from './chat/SkillPicker';
 import { useStreamingChat, type LocalMessage, type ToolResultPayload } from './hooks/useStreamingChat';
+import { infUpdateNode } from '@/lib/canvas-api';
 
 /** Callback the parent canvas page wires in via node data. */
 export type OnBranchCreate = (
@@ -25,7 +26,17 @@ export type OnBranchCreate = (
 
 export const ChatNode = memo(({ id, data }: any) => {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [skill, setSkill] = useState<string>(data.skill ?? 'tutor');
+  const [skill, setSkill] = useState<string>(data.skill ?? 'Tutor');
+
+  const handleSkillSelect = useCallback(
+    (newSkill: string) => {
+      setSkill(newSkill);
+      if (!id.startsWith('local-')) {
+        infUpdateNode(id, { skill: newSkill }).catch(() => { /* ignore */ });
+      }
+    },
+    [id],
+  );
 
   // Branch mode: 'off' = normal chat, 'manual' = user selects messages to branch
   const [branchMode, setBranchMode] = useState<'off' | 'manual'>('off');
@@ -172,7 +183,7 @@ export const ChatNode = memo(({ id, data }: any) => {
         {/* Top row: window controls */}
         <div className="flex items-center justify-between h-8 pl-3 pr-0">
           <div className="flex items-center gap-1.5">
-            <SkillPicker currentSkill={skill} onSelect={setSkill} />
+            <SkillPicker currentSkill={skill} onSelect={handleSkillSelect} />
 
             {/* Branch menu trigger */}
             <div className="relative">

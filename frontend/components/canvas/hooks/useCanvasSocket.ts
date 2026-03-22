@@ -37,15 +37,17 @@ interface WSNodeUnlocked   { type: 'node_unlocked';   node_id: string }
 interface WSEdgeCreated    { type: 'edge_created';    edge: InfCanvasEdge }
 interface WSEdgeDeleted    { type: 'edge_deleted';    edge_id: string }
 interface WSMessageComplete { type: 'message_complete'; node_id: string; message: InfCanvasMessage }
-interface WSSessionJoined  { type: 'session_joined';  session_id: string; display_name: string }
-interface WSSessionLeft    { type: 'session_left';    session_id: string }
+interface WSSessionJoined  { type: 'session_joined';    session_id: string; display_name: string }
+interface WSSessionLeft    { type: 'session_left';      session_id: string }
+interface WSNodeSkillChanged { type: 'node_skill_changed'; node_id: string; skill: string }
 
 type WSEvent =
   | WSNodeCreated | WSNodeMoved | WSNodeCollapsed | WSNodeDeleted
   | WSNodeLocked  | WSNodeUnlocked
   | WSEdgeCreated | WSEdgeDeleted
   | WSMessageComplete
-  | WSSessionJoined | WSSessionLeft;
+  | WSSessionJoined | WSSessionLeft
+  | WSNodeSkillChanged;
 
 /* ── Options ────────────────────────────────────────────────────────── */
 
@@ -68,6 +70,8 @@ export interface UseCanvasSocketOptions {
   onEdgeDeleted?: (edgeId: string) => void;
   /** Called when a backend-streaming message is finalised on another node. */
   onMessageComplete?: (nodeId: string, message: InfCanvasMessage) => void;
+  /** Called when another client changes a node's skill. */
+  onNodeSkillChanged?: (nodeId: string, skill: string) => void;
 }
 
 /* ── Return ─────────────────────────────────────────────────────────── */
@@ -179,6 +183,10 @@ export function useCanvasSocket(
 
         case 'message_complete':
           cb?.onMessageComplete?.(parsed.node_id, parsed.message);
+          break;
+
+        case 'node_skill_changed':
+          cb?.onNodeSkillChanged?.(parsed.node_id, parsed.skill);
           break;
 
         case 'session_joined':
