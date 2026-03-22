@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -7,8 +7,17 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.database import get_db
-from app.models.canvas import CanvasProject, CanvasNode, CanvasEdge, CanvasMessage
+from app.models.canvas import (
+    CanvasBranch,
+    CanvasEdge,
+    CanvasFile,
+    CanvasMessage,
+    CanvasNode,
+    CanvasProject,
+    CanvasSession,
+)
 from app.services.canvas.claude import stream_canvas_response
+from app.services.canvas.storage import save_file
 
 router = APIRouter()
 
@@ -207,12 +216,16 @@ async def list_messages(node_id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Node not found")
 
     msgs = (
-        await db.execute(
-            select(CanvasMessage)
-            .where(CanvasMessage.node_id == node_id)
-            .order_by(CanvasMessage.created_at)
+        (
+            await db.execute(
+                select(CanvasMessage)
+                .where(CanvasMessage.node_id == node_id)
+                .order_by(CanvasMessage.created_at)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return [_message_dict(m) for m in msgs]
 
@@ -226,7 +239,170 @@ async def send_message(
         raise HTTPException(status_code=404, detail="Node not found")
 
     async def event_stream():
-        async for chunk in stream_canvas_response(node_id, body.content, body.session_id, db):
+        async for chunk in stream_canvas_response(
+            node_id, body.content, body.session_id, db
+        ):
             yield chunk
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------------------
+# Branching
+# ---------------------------------------------------------------------------
+
+
+class BranchCreate(BaseModel):
+    source_message_ids: list[str]
+    title: str
+
+
+@router.post("/nodes/{node_id}/branch", status_code=201)
+async def create_branch(
+    node_id: UUID, body: BranchCreate, db: AsyncSession = Depends(get_db)
+):
+    node = await db.get(CanvasNode, node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    child = CanvasNode(
+        project_id=node.project_id,
+        type="chat",
+        title=body.title,
+        position_x=node.position_x + 300,
+        position_y=node.position_y + 100,
+        skill=node.skill,
+    )
+    db.add(child)
+    await db.flush()
+
+    edge = CanvasEdge(
+        project_id=node.project_id,
+        source_node_id=node_id,
+        target_node_id=child.id,
+    )
+    db.add(edge)
+    await db.flush()
+
+    branch = CanvasBranch(
+        parent_node_id=node_id,
+        child_node_id=child.id,
+        source_message_ids_json=body.source_message_ids,
+    )
+    db.add(branch)
+    await db.flush()
+
+    return {
+        "child_node": _node_dict(child),
+        "edge": _edge_dict(edge),
+        "branch_record": {
+            "id": str(branch.id),
+            "parent_node_id": str(branch.parent_node_id),
+            "child_node_id": str(branch.child_node_id),
+            "source_message_ids": branch.source_message_ids_json,
+            "created_at": branch.created_at.isoformat(),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# File upload
+# ---------------------------------------------------------------------------
+
+
+_SUPPORTED_CONTENT_TYPES = {
+    "image/jpeg": "image",
+    "image/png": "image",
+    "image/gif": "image",
+    "image/webp": "image",
+    "application/pdf": "document",
+}
+
+_MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB
+
+
+@router.post("/projects/{project_id}/files", status_code=201)
+async def upload_file(
+    project_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await db.get(CanvasProject, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    file_bytes = await file.read()
+    if len(file_bytes) > _MAX_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 20 MB)")
+
+    content_type = file.content_type or ""
+    node_type = _SUPPORTED_CONTENT_TYPES.get(content_type)
+    if not node_type:
+        raise HTTPException(
+            status_code=415,
+            detail="Unsupported file type — upload an image (JPEG/PNG/GIF/WebP) or PDF",
+        )
+
+    node = CanvasNode(
+        project_id=project_id,
+        type=node_type,
+        title=file.filename or "Uploaded file",
+        position_x=0,
+        position_y=0,
+    )
+    db.add(node)
+    await db.flush()
+
+    stored = await save_file(
+        file_bytes,
+        file.filename or "file",
+        content_type,
+        str(project_id),
+    )
+
+    canvas_file = CanvasFile(
+        project_id=project_id,
+        node_id=node.id,
+        filename=file.filename or "file",
+        content_type=content_type,
+        file_data=stored["file_data"],
+        storage_key=stored["storage_key"],
+    )
+    db.add(canvas_file)
+    await db.flush()
+
+    return {
+        "node_id": str(node.id),
+        "file_id": str(canvas_file.id),
+        "type": node_type,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Sessions
+# ---------------------------------------------------------------------------
+
+
+class SessionCreate(BaseModel):
+    display_name: str
+
+
+@router.post("/projects/{project_id}/sessions", status_code=201)
+async def create_session(
+    project_id: UUID, body: SessionCreate, db: AsyncSession = Depends(get_db)
+):
+    project = await db.get(CanvasProject, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    session = CanvasSession(
+        project_id=project_id,
+        display_name=body.display_name,
+    )
+    db.add(session)
+    await db.flush()
+
+    return {
+        "session_id": str(session.id),
+        "display_name": session.display_name,
+    }
