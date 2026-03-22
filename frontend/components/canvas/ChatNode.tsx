@@ -15,7 +15,8 @@ import {
 import { MessageList } from './chat/MessageList';
 import { MessageInput } from './chat/MessageInput';
 import { SkillPicker } from './chat/SkillPicker';
-import { useStreamingChat, type LocalMessage } from './hooks/useStreamingChat';
+import { useStreamingChat, type LocalMessage, type ToolResultPayload } from './hooks/useStreamingChat';
+import { infUpdateNode } from '@/lib/canvas-api';
 
 /** Callback the parent canvas page wires in via node data. */
 export type OnBranchCreate = (
@@ -25,7 +26,17 @@ export type OnBranchCreate = (
 
 export const ChatNode = memo(({ id, data }: any) => {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [skill, setSkill] = useState<string>(data.skill ?? 'tutor');
+  const [skill, setSkill] = useState<string>(data.skill ?? 'Tutor');
+
+  const handleSkillSelect = useCallback(
+    (newSkill: string) => {
+      setSkill(newSkill);
+      if (!id.startsWith('local-')) {
+        infUpdateNode(id, { skill: newSkill }).catch(() => { /* ignore */ });
+      }
+    },
+    [id],
+  );
 
   // Branch mode: 'off' = normal chat, 'manual' = user selects messages to branch
   const [branchMode, setBranchMode] = useState<'off' | 'manual'>('off');
@@ -40,11 +51,14 @@ export const ChatNode = memo(({ id, data }: any) => {
   const onDeleteNode: ((nodeId: string) => void) | undefined = data.onDeleteNode;
   const linkedContext: LocalMessage[] | undefined = data.linkedContext;
   const autoBranch: boolean = data.autoBranch ?? false;
+  const sessionId: string | undefined = data.sessionId;
+  const onToolResult: ((payload: ToolResultPayload) => void) | undefined = data.onToolResult;
 
-  const { messages, isLoading, error, send, clearError } = useStreamingChat(
-    id,
-    initialMessages ? { initialMessages } : undefined,
-  );
+  const { messages, isLoading, error, send, clearError } = useStreamingChat(id, {
+    initialMessages,
+    sessionId,
+    onToolResult,
+  });
 
   // --- Branching logic ---
 
@@ -109,7 +123,7 @@ export const ChatNode = memo(({ id, data }: any) => {
     return (
       <div
         onClick={() => setIsExpanded(true)}
-        className="px-4 py-2.5 bg-white rounded-full border border-[#E2E8F0] shadow-md cursor-pointer hover:border-[#00274C] transition-all min-w-[140px]"
+        className="px-4 py-2.5 bg-white rounded-md border border-[#E2E8F0] shadow-md cursor-pointer hover:border-[#00274C] transition-all min-w-[140px]"
       >
         <Handle type="target" position={Position.Left} id="left" className="magnetic-handle" />
         <Handle type="source" position={Position.Right} id="right" className="magnetic-handle" />
@@ -127,7 +141,7 @@ export const ChatNode = memo(({ id, data }: any) => {
   // ---- Expanded view ----
   return (
     <div
-      className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg relative"
+      className="bg-white rounded-md border border-[#E2E8F0] shadow-lg relative"
       style={{ width: '100%', height: '100%', minWidth: 320, minHeight: 360 }}
     >
       {/* Invisible magnetic handles — styled via CSS class */}
@@ -162,14 +176,14 @@ export const ChatNode = memo(({ id, data }: any) => {
       </NodeResizeControl>
 
       {/* Content wrapper — clips overflow so node never auto-grows */}
-      <div className="absolute inset-0 flex flex-col overflow-hidden rounded-xl">
+      <div className="absolute inset-0 flex flex-col overflow-hidden rounded-md">
 
       {/* ── Title bar ── */}
-      <div className="bg-[#00274C] rounded-t-xl flex flex-col shrink-0">
+      <div className="bg-[#00274C] rounded-t-md flex flex-col shrink-0">
         {/* Top row: window controls */}
         <div className="flex items-center justify-between h-8 pl-3 pr-0">
           <div className="flex items-center gap-1.5">
-            <SkillPicker currentSkill={skill} onSelect={setSkill} />
+            <SkillPicker currentSkill={skill} onSelect={handleSkillSelect} />
 
             {/* Branch menu trigger */}
             <div className="relative">
@@ -261,7 +275,7 @@ export const ChatNode = memo(({ id, data }: any) => {
             )}
             <button
               onClick={() => onDeleteNode?.(id)}
-              className="w-10 flex items-center justify-center hover:bg-red-500 transition-colors rounded-tr-xl"
+              className="w-10 flex items-center justify-center hover:bg-red-500 transition-colors rounded-tr-md"
               title="Close"
             >
               <X className="w-3.5 h-3.5 text-white/80" />

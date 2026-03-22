@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { infStreamMessage } from '@/lib/canvas-api';
+import { infStreamMessage, infGetMessages } from '@/lib/canvas-api';
 import type { InfCanvasNode, InfCanvasEdge } from '@/lib/canvas-api';
 
 export interface LocalMessage {
@@ -118,15 +118,30 @@ export function useStreamingChat(
   // AbortController for the active stream — allows cancellation.
   const abortRef = useRef<AbortController | null>(null);
 
-  // When nodeId changes (e.g. linear view switches focus node), abort any
-  // in-flight stream and reset messages so the new node starts clean.
+  // When nodeId changes, abort in-flight stream and load persisted messages.
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    setMessages(options?.initialMessages ?? []);
     setIsLoading(false);
     setToolStatus(null);
     setError(null);
+
+    // Local (unsaved) nodes have no backend record yet — use initialMessages.
+    if (nodeId.startsWith('local-')) {
+      setMessages(options?.initialMessages ?? []);
+      return;
+    }
+
+    infGetMessages(nodeId)
+      .then((fetched) => {
+        const hydrated = fetched
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content ?? '' }));
+        setMessages(hydrated.length > 0 ? hydrated : (options?.initialMessages ?? []));
+      })
+      .catch(() => {
+        setMessages(options?.initialMessages ?? []);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeId]);
 

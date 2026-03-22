@@ -342,6 +342,10 @@
   background: var(--light-blue-wash);
 }
 
+/* Hide scrollbar while keeping scroll functionality */
+.scrollbar-hidden::-webkit-scrollbar { display: none; }
+.scrollbar-hidden { -ms-overflow-style: none; scrollbar-width: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,
   .animate-fade-in,

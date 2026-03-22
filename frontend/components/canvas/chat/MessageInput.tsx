@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send } from 'lucide-react';
+import { CornerDownLeft } from 'lucide-react';
 
 interface MessageInputProps {
   onSend: (message: string) => void;
@@ -57,7 +57,7 @@ export function MessageInput({
           disabled={disabled || !input.trim()}
           className="w-9 h-9 bg-primary rounded-full flex items-center justify-center hover:bg-chart-2 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Send className="w-4 h-4 text-white" />
+          <CornerDownLeft className="w-4 h-4 text-white" />
         </button>
       </div>
     </div>

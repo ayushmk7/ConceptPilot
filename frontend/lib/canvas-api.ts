@@ -242,6 +242,7 @@ export interface InfCanvasNode {
   skill: string | null;
   active_user: string | null;
   created_at: string;
+  content?: string;
 }
 
 export interface InfCanvasEdge {

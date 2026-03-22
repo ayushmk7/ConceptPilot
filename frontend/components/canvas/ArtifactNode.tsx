@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
-import { Handle, Position } from '@xyflow/react';
-import { Code, Minimize2, Copy, Check, Download } from 'lucide-react';
+import { Handle, Position, useReactFlow } from '@xyflow/react';
+import { Code, Minimize2, Copy, Check, Download, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -19,9 +19,19 @@ function deriveFilename(title: string, language?: string): string {
   return `${slug}.${ext}`;
 }
 
-export const ArtifactNode = memo(({ data }: any) => {
+export const ArtifactNode = memo(({ id, data }: any) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
+  const { deleteElements } = useReactFlow();
+
+  const handleDelete = () => {
+    deleteElements({ nodes: [{ id }] });
+    if (!id.startsWith('local-')) {
+      import('@/lib/canvas-api').then(({ infDeleteNode }) => {
+        infDeleteNode(id).catch(() => {});
+      });
+    }
+  };
 
   const copyContent = () => {
     if (data.content) {
@@ -47,7 +57,7 @@ export const ArtifactNode = memo(({ data }: any) => {
     return (
       <div
         onClick={() => setIsExpanded(true)}
-        className="px-4 py-2.5 bg-white rounded-full border border-[#E2E8F0] shadow-md cursor-pointer hover:border-[#00274C] transition-all min-w-[140px]"
+        className="px-4 py-2.5 bg-white rounded-md border border-[#E2E8F0] shadow-md cursor-pointer hover:border-[#00274C] transition-all min-w-[140px]"
       >
         <Handle type="target" position={Position.Left} id="left" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
         <Handle type="source" position={Position.Right} id="right" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
@@ -62,14 +72,14 @@ export const ArtifactNode = memo(({ data }: any) => {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg w-[420px]">
+    <div className="bg-white rounded-md border border-[#E2E8F0] shadow-lg w-[420px]">
       <Handle type="target" position={Position.Left} id="left" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
       <Handle type="source" position={Position.Right} id="right" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
       <Handle type="target" position={Position.Top} id="top" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
       <Handle type="source" position={Position.Bottom} id="bottom" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
 
       {/* Header */}
-      <div className="h-10 bg-[#1E1E2E] rounded-t-xl px-4 flex items-center justify-between">
+      <div className="h-10 bg-[#1E1E2E] rounded-t-md px-4 flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <Code className="w-4 h-4 text-[#7C3AED] shrink-0" />
           <span className="text-sm font-medium text-white truncate">{data.title}</span>
@@ -106,11 +116,18 @@ export const ArtifactNode = memo(({ data }: any) => {
           >
             <Minimize2 className="w-3.5 h-3.5 text-white/70" />
           </button>
+          <button
+            onClick={handleDelete}
+            className="p-1 hover:bg-red-500 rounded transition-colors"
+            title="Delete"
+          >
+            <X className="w-3.5 h-3.5 text-white/70" />
+          </button>
         </div>
       </div>
 
       {/* Content */}
-      <div className="bg-white rounded-b-xl max-h-[400px] overflow-y-auto nowheel nodrag">
+      <div className="bg-white rounded-b-md max-h-[400px] overflow-y-auto nowheel nodrag">
         {data.content ? (
           <div className="p-4 prose prose-sm max-w-none prose-p:my-1 prose-pre:my-2 prose-pre:p-0">
             <ReactMarkdown
