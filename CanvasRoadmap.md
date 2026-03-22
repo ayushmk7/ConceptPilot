@@ -576,20 +576,33 @@ Build in this sequence. Each step is independently testable.
 5. ✅ Add canvas env vars to `config.py` and `.env.example`
 6. **Test**: `POST /api/canvas/projects` → `POST /api/canvas/projects/:id/nodes` → `GET /api/canvas/projects/:id`
 
-### Phase 2 — Streaming Chat (testable via curl + EventSource)
+### Phase 2 — Streaming Chat (testable via curl + EventSource) ✅ DONE
 
-1. Create `services/canvas/skills.py` (3 skills only: Tutor, Socratic, Research Assistant)
-2. Create `services/canvas/context.py` (context assembly — builds messages array from linked nodes)
-3. Create `services/canvas/claude.py` (Anthropic streaming wrapper — no tool handling for hackathon)
-4. Add `POST /api/canvas/nodes/:id/messages` SSE endpoint to `routers/canvas.py`
-5. **Test**: `curl -N -X POST .../messages` → see SSE tokens streaming
+1. ✅ Create `services/canvas/skills.py` (3 skills only: Tutor, Socratic, Research Assistant)
+2. ✅ Create `services/canvas/context.py` (context assembly — builds messages array from linked nodes)
+3. ✅ Create `services/canvas/claude.py` (Anthropic streaming wrapper — no tool handling for hackathon)
+4. ✅ Add `POST /api/canvas/nodes/:id/messages` SSE endpoint to `routers/canvas.py`
+5. ✅ Add `GET /api/canvas/nodes/:id/messages` list endpoint
+6. ✅ **Test**: `curl -N -X POST .../messages` → SSE tokens stream, messages persisted to DB
 
 > **Hackathon scope decisions:**
 > - Tools (`create_branches`, `generate_quiz`, etc.) — **SKIPPED**, too complex under time pressure
 > - Skills reduced to 3: **Tutor**, **Socratic**, **Research Assistant**
 
-### Phase 3 — Frontend Canvas Route
+### Phase 3 — Frontend Canvas Route 🤝 FRONTEND HANDOFF
 
+> **Owner: Frontend partner.** Backend is ready — SSE endpoint is live and tested.
+> Partner needs `NEXT_PUBLIC_API_URL=http://localhost:8000` in `frontend/.env.local`.
+
+**What the backend provides (ready now):**
+- `POST /api/canvas/projects` — create project
+- `GET /api/canvas/projects/:id` — load all nodes + edges
+- `POST /api/canvas/projects/:id/nodes` — create node
+- `PATCH /api/canvas/nodes/:id` — update position/skill
+- `POST /api/canvas/nodes/:id/messages` — SSE stream
+- `GET /api/canvas/nodes/:id/messages` — load conversation history
+
+**Frontend tasks:**
 1. Create `frontend/app/canvas/layout.tsx` (full-bleed, no sidebar)
 2. Create `frontend/lib/api.ts` (shared fetch wrapper)
 3. Create `frontend/lib/canvas-api.ts` (typed canvas API calls)
@@ -600,32 +613,37 @@ Build in this sequence. Each step is independently testable.
 
 ### Phase 4 — Branching & Files
 
-1. Backend: `POST /api/canvas/nodes/:id/branch` endpoint
-2. Backend: `POST /api/canvas/projects/:id/files` upload endpoint
-3. Backend: Wire file content into context assembly (image → vision block, PDF → document block)
-4. Frontend: `BranchSelector.tsx` — checkbox selection + "Create Branch" action
-5. Frontend: `ImageNode.tsx` + `DocumentNode.tsx` (real file display, not placeholders)
-6. Frontend: Canvas drag-and-drop file handler → calls upload endpoint → adds node at drop position
+**Backend tasks (this session):**
+1. `POST /api/canvas/nodes/:id/branch` endpoint
+2. `POST /api/canvas/projects/:id/files` upload endpoint
+3. Wire image + document files into `context.py`
+
+**Frontend tasks (partner):**
+4. `BranchSelector.tsx` — checkbox selection + "Create Branch" action
+5. `ImageNode.tsx` + `DocumentNode.tsx` (real file display, not placeholders)
+6. Canvas drag-and-drop file handler → calls upload endpoint → adds node at drop position
 7. **Test**: Branch a conversation, upload an image, draw edge to chat, ask Claude about image
 
-### Phase 5 — Tools & Auto-Branch
+### Phase 5 — Tools & Auto-Branch ⏸ POSTPONED
 
-1. Backend: `services/canvas/tools.py` — define tool schemas
-2. Backend: Wire tool handling into the streaming pipeline in `claude.py`
-3. Backend: `create_branches` tool creates child nodes in DB, returns them in SSE `tool_result`
-4. Frontend: Handle `tool_result` events → add new nodes to React Flow in fan layout
-5. Frontend: `ArtifactNode.tsx` (render code, LaTeX, flashcards)
-6. Frontend: `SkillPicker.tsx` dropdown on ChatNode header
-7. **Test**: Ask Claude a multi-approach question → nodes fan out on canvas
+> Deferred until Phases 3, 4, and 6 are complete. Can be added as an enhancement after demo.
+
+- Backend: `services/canvas/tools.py` + wire into `claude.py`
+- Frontend: `tool_result` SSE handling, `ArtifactNode.tsx`, `SkillPicker.tsx`
 
 ### Phase 6 — Multiplayer
 
-1. Backend: `services/canvas/multiplayer.py` — room manager (in-memory dict)
-2. Backend: `ws/canvas.py` — WebSocket endpoint, room join/leave, lock logic
-3. Backend: Broadcast mutation events from all canvas REST endpoints
-4. Frontend: `useCanvasSocket.ts` hook — connect, handle events, update React Flow state
-5. Frontend: `JoinModal.tsx`, `PresenceBar.tsx`, `LockIndicator.tsx`
-6. **Test**: Two browser tabs on same project — nodes created in one appear in the other
+**Backend tasks (this session):**
+1. `services/canvas/multiplayer.py` — in-memory room manager
+2. `app/ws/__init__.py` + `app/ws/canvas.py` — WebSocket endpoint + lock logic
+3. Mount WebSocket router in `main.py`
+4. Broadcast mutation events from all REST endpoints
+5. `POST /api/canvas/projects/:id/sessions` endpoint
+
+**Frontend tasks (partner):**
+6. `useCanvasSocket.ts` hook — connect, handle events, update React Flow state
+7. `JoinModal.tsx`, `PresenceBar.tsx`, `LockIndicator.tsx`
+8. **Test**: Two browser tabs on same project — nodes created in one appear in the other
 
 ---
 
