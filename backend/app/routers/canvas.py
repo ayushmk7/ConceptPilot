@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -470,3 +470,40 @@ async def create_session(
         "session_id": str(session.id),
         "display_name": session.display_name,
     }
+
+
+# ---------------------------------------------------------------------------
+# Artifact download
+# ---------------------------------------------------------------------------
+
+
+@router.get("/nodes/{node_id}/artifact/download")
+async def download_artifact(node_id: UUID, db: AsyncSession = Depends(get_db)):
+    node = await db.get(CanvasNode, node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    if node.type != "artifact":
+        raise HTTPException(status_code=400, detail="Node is not an artifact")
+
+    # Fetch the latest assistant message — that's the generated artifact content
+    result = await db.execute(
+        select(CanvasMessage)
+        .where(CanvasMessage.node_id == node_id)
+        .where(CanvasMessage.role == "assistant")
+        .order_by(CanvasMessage.created_at.desc())
+        .limit(1)
+    )
+    msg = result.scalar_one_or_none()
+    if not msg or not msg.content:
+        raise HTTPException(status_code=404, detail="Artifact has no content yet")
+
+    safe_title = "".join(
+        c if c.isalnum() or c in "-_ " else "" for c in (node.title or "artifact")
+    )
+    filename = f"{safe_title.strip().replace(' ', '_')}.md"
+
+    return Response(
+        content=msg.content.encode("utf-8"),
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
