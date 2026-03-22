@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     ELEVENLABS_API_KEY: str = ""
     ELEVENLABS_VOICE_ID: str = ""
     ELEVENLABS_MODEL_ID: str = "eleven_multilingual_v2"
+    # Split long transcripts into multiple TTS requests (ElevenLabs per-request limits).
+    ELEVENLABS_TTS_CHUNK_CHARS: int = 3800
 
     # --- Object Storage (S3-compatible) ---
     # Vultr-prefixed vars are the canonical names.  Generic S3_* aliases are

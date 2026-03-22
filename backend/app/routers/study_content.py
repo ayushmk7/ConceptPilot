@@ -20,7 +20,7 @@ from app.schemas.schemas import (
     StudyContentResponse,
 )
 from app.services.object_storage_service import get_object_bytes
-from app.services.study_content_service import kickoff_study_content_generation
+from app.services.study_content_service import kickoff_study_content_generation, remove_study_content_storage_artifacts
 
 router = APIRouter(prefix="/api/v1", tags=["Study Content"])
 
@@ -92,6 +92,30 @@ async def list_study_content_for_exam(
     )
     rows = result.scalars().all()
     return StudyContentListResponse(items=[_to_response(row) for row in rows])
+
+
+@router.delete("/exams/{exam_id}/study-content/{content_id}", status_code=204)
+async def delete_study_content_for_exam(
+    exam_id: UUID,
+    content_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(enforce_instructor_write_limit),
+):
+    exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
+    if not exam_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Exam not found")
+    result = await db.execute(
+        select(StudyContent).where(
+            StudyContent.id == content_id,
+            StudyContent.exam_id == exam_id,
+        )
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Study content not found")
+    await remove_study_content_storage_artifacts(item)
+    await db.delete(item)
+    await db.commit()
 
 
 @router.get("/study-content/{content_id}", response_model=StudyContentResponse)

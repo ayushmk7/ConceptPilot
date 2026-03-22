@@ -56,7 +56,7 @@ from app.services.student_workspace_service import (
     ensure_student_infinite_canvas_workspace,
     get_workspace_by_exam_id,
 )
-from app.services.study_content_service import kickoff_study_content_generation
+from app.services.study_content_service import kickoff_study_content_generation, remove_study_content_storage_artifacts
 from app.services.study_material_service import extract_text_from_upload, generate_concept_graph_from_text
 from app.services.compute_queue_service import enqueue_compute_job
 from app.services.compute_runner_service import run_compute_pipeline_for_run
@@ -560,6 +560,23 @@ async def student_list_study_content(
     )
     rows = result.scalars().all()
     return StudyContentListResponse(items=[_to_study_response(row) for row in rows])
+
+
+@router.delete("/study-content/{content_id}", status_code=204)
+async def student_delete_study_content(
+    content_id: UUID,
+    ctx: tuple[Exam, StudentWorkspace] = Depends(require_student_workspace),
+    db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(enforce_student_write_limit),
+):
+    exam, _ws = ctx
+    result = await db.execute(select(StudyContent).where(StudyContent.id == content_id))
+    item = result.scalar_one_or_none()
+    if not item or item.exam_id != exam.id:
+        raise HTTPException(status_code=404, detail="Study content not found")
+    await remove_study_content_storage_artifacts(item)
+    await db.delete(item)
+    await db.commit()
 
 
 @router.get("/canvas-workspace", response_model=CanvasWorkspaceResponse)

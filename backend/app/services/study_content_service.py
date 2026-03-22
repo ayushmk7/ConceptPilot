@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,9 @@ from app.config import settings
 from app.database import async_session
 from app.models.models import ClassAggregate, Exam, StudyContent
 from app.services.elevenlabs_service import synthesize_speech
-from app.services.object_storage_service import put_object_bytes
+from app.services.object_storage_service import delete_object_key, put_object_bytes
+
+logger = logging.getLogger("conceptpilot.study_content")
 
 STUDY_SCRIPT_PROMPT_VERSION = "study_script_v1"
 _client: anthropic.AsyncAnthropic | None = None
@@ -89,7 +92,7 @@ Return JSON in this schema:
 """.strip()
     response = await client.messages.create(
         model=settings.ANTHROPIC_MODEL,
-        max_tokens=min(settings.ANTHROPIC_MAX_TOKENS, 1500),
+        max_tokens=min(settings.ANTHROPIC_MAX_TOKENS, 2048),
         temperature=0.2,
         system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],
@@ -114,12 +117,32 @@ def _local_audio_path(content_id: UUID) -> Path:
     return base / f"{content_id}.mp3"
 
 
+async def remove_study_content_storage_artifacts(item: StudyContent) -> None:
+    """Delete generated MP3 on disk or in object storage (best-effort)."""
+    key = item.storage_key
+    if not key:
+        return
+    if key.startswith("file://"):
+        path = Path(key.replace("file://", "", 1))
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("Could not remove local study content file %s: %s", path, exc)
+    elif key.startswith("s3://"):
+        _, _, tail = key.partition("s3://")
+        _, _, object_key = tail.partition("/")
+        if object_key:
+            await delete_object_key(object_key)
+
+
 async def run_generation_for_content(content_id: UUID) -> None:
     """Execute the full study-content generation pipeline for one record."""
+    logger.info("study_content generation started content_id=%s", content_id)
     async with async_session() as db:
         res = await db.execute(select(StudyContent).where(StudyContent.id == content_id))
         content = res.scalar_one_or_none()
         if not content:
+            logger.warning("study_content generation skipped: no row for content_id=%s", content_id)
             return
 
         exam_res = await db.execute(select(Exam).where(Exam.id == content.exam_id))
@@ -129,6 +152,7 @@ async def run_generation_for_content(content_id: UUID) -> None:
             content.error_detail = "Exam not found"
             content.completed_at = datetime.utcnow()
             await db.commit()
+            logger.error("study_content generation failed content_id=%s: exam not found", content_id)
             return
 
         try:
@@ -187,13 +211,41 @@ async def run_generation_for_content(content_id: UUID) -> None:
             content.error_detail = None
             content.completed_at = datetime.utcnow()
             await db.commit()
+            logger.info(
+                "study_content generation completed content_id=%s exam_id=%s type=%s",
+                content.id,
+                content.exam_id,
+                content.content_type,
+            )
         except Exception as exc:
             content.status = "failed"
             content.error_detail = str(exc)[:400]
             content.completed_at = datetime.utcnow()
             await db.commit()
+            logger.error(
+                "study_content generation failed content_id=%s exam_id=%s type=%s: %s",
+                content.id,
+                content.exam_id,
+                content.content_type,
+                exc,
+                exc_info=True,
+            )
+
+
+def _log_study_content_task_result(task: asyncio.Task) -> None:
+    """Surface exceptions that escape the pipeline (e.g. DB errors after try/except)."""
+    try:
+        exc = task.exception()
+    except asyncio.CancelledError:
+        return
+    except Exception:
+        logger.exception("study_content task: could not read task.exception()")
+        return
+    if exc is not None:
+        logger.error("study_content background task failed: %s", exc, exc_info=exc)
 
 
 def kickoff_study_content_generation(content_id: UUID) -> None:
     """Fire-and-forget launcher for study-content generation."""
-    asyncio.create_task(run_generation_for_content(content_id))
+    task = asyncio.create_task(run_generation_for_content(content_id))
+    task.add_done_callback(_log_study_content_task_result)

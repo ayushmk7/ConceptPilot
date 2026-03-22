@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward,
   ChevronLeft, ChevronRight, X, Maximize2, Minimize2,
-  Headphones, Presentation, Video, Mic, Loader2,
+  Headphones, Presentation, Video, Mic, Loader2, Trash2,
 } from 'lucide-react';
 import type { StudyContent, SlideData } from '@/lib/types';
 import * as api from '@/lib/api';
@@ -38,9 +38,12 @@ export function AudioPlayer({ content, onClose }: { content: StudyContent; onClo
       {audioSrc ? (
         <audio key={audioSrc} controls className="w-full mt-1" preload="metadata" src={audioSrc} />
       ) : content.status === 'error' ? (
-        <p className="text-sm text-destructive">
-          Generation failed. You can try generating again from the list.
-        </p>
+        <div className="text-sm text-destructive space-y-1">
+          <p>Generation failed. You can try generating again from the list.</p>
+          {content.errorDetail && (
+            <p className="text-xs text-destructive/90 break-words font-mono">{content.errorDetail}</p>
+          )}
+        </div>
       ) : (
         <p className="text-sm text-muted-foreground flex items-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin shrink-0" />
@@ -61,6 +64,12 @@ export function SlideViewer({ content, onClose }: { content: StudyContent; onClo
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
+    if (content.status === 'error') {
+      setLoading(false);
+      setSlides([]);
+      setFetchError(content.errorDetail || 'Generation failed.');
+      return;
+    }
     setLoading(true);
     setFetchError(null);
     api
@@ -74,7 +83,7 @@ export function SlideViewer({ content, onClose }: { content: StudyContent; onClo
         setSlides([]);
         setLoading(false);
       });
-  }, [content.id]);
+  }, [content.id, content.status, content.errorDetail]);
 
   if (loading) {
     return (
@@ -95,7 +104,7 @@ export function SlideViewer({ content, onClose }: { content: StudyContent; onClo
             </button>
           )}
         </div>
-        <p className="text-sm text-destructive">{fetchError}</p>
+        <p className="text-sm text-destructive break-words">{fetchError}</p>
       </div>
     );
   }
@@ -209,6 +218,12 @@ export function VideoWalkthroughPlayer({ content, onClose }: { content: StudyCon
   const narrationSrc = content.status === 'ready' ? api.getStudyContentDownloadUrl(content.id) : null;
 
   useEffect(() => {
+    if (content.status === 'error') {
+      setLoading(false);
+      setSlides([]);
+      setFetchError(content.errorDetail || 'Generation failed.');
+      return;
+    }
     setLoading(true);
     setFetchError(null);
     api
@@ -222,7 +237,7 @@ export function VideoWalkthroughPlayer({ content, onClose }: { content: StudyCon
         setSlides([]);
         setLoading(false);
       });
-  }, [content.id]);
+  }, [content.id, content.status, content.errorDetail]);
 
   useEffect(() => {
     if (isPlaying && slides.length > 0) {
@@ -258,7 +273,7 @@ export function VideoWalkthroughPlayer({ content, onClose }: { content: StudyCon
             </button>
           )}
         </div>
-        <p className="text-sm text-destructive">{fetchError}</p>
+        <p className="text-sm text-destructive break-words">{fetchError}</p>
       </div>
     );
   }
@@ -367,9 +382,13 @@ export function VideoWalkthroughPlayer({ content, onClose }: { content: StudyCon
 export function StudyContentCard({
   content,
   onOpen,
+  onDelete,
+  deleting,
 }: {
   content: StudyContent;
   onOpen: (content: StudyContent) => void;
+  onDelete?: (content: StudyContent) => void | Promise<void>;
+  deleting?: boolean;
 }) {
   const icons = { audio: Headphones, slides: Presentation, video: Video, podcast: Mic };
   const colors = {
@@ -387,31 +406,57 @@ export function StudyContentCard({
   const Icon = icons[content.type];
 
   return (
-    <button
-      onClick={() => onOpen(content)}
-      className="card-elevated p-5 text-left hover:shadow-md transition-all w-full"
-    >
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: bgs[content.type] }}>
-          <Icon className="w-5 h-5" style={{ color: colors[content.type] }} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-semibold text-primary mb-0.5">{content.title}</h4>
-          <p className="text-xs text-muted-foreground line-clamp-2">{content.description}</p>
-          <div className="mt-2 flex items-center gap-3 text-xs text-secondary-text">
-            {content.duration && <span>{content.duration}</span>}
-            {content.slideCount && <span>{content.slideCount} slides</span>}
-            {content.status === 'generating' && (
-              <span className="flex items-center gap-1 text-chart-3">
-                <Loader2 className="w-3 h-3 animate-spin" /> Generating...
-              </span>
-            )}
-            {content.status === 'error' && (
-              <span className="text-destructive">Failed</span>
-            )}
+    <div className="card-elevated p-5 flex gap-3 items-start hover:shadow-md transition-all w-full">
+      <button
+        type="button"
+        onClick={() => onOpen(content)}
+        className="flex-1 min-w-0 text-left"
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: bgs[content.type] }}>
+            <Icon className="w-5 h-5" style={{ color: colors[content.type] }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-semibold text-primary mb-0.5">{content.title}</h4>
+            <p className="text-xs text-muted-foreground line-clamp-2">{content.description}</p>
+            <div className="mt-2 flex items-center gap-3 text-xs text-secondary-text">
+              {content.duration && <span>{content.duration}</span>}
+              {content.slideCount && <span>{content.slideCount} slides</span>}
+              {content.status === 'generating' && (
+                <span className="flex items-center gap-1 text-chart-3">
+                  <Loader2 className="w-3 h-3 animate-spin shrink-0" /> Generating...
+                </span>
+              )}
+              {content.status === 'error' && (
+                <div className="text-destructive">
+                  <span className="block">Failed</span>
+                  {content.errorDetail && (
+                    <p className="text-xs text-destructive/90 line-clamp-3 mt-0.5 font-mono break-words">
+                      {content.errorDetail}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </button>
+      </button>
+      {onDelete && (
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            void onDelete(content);
+          }}
+          className="shrink-0 p-2 rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/5 transition-colors disabled:opacity-50"
+          aria-label="Delete study content"
+          title="Delete"
+        >
+          {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+        </button>
+      )}
+    </div>
   );
 }
