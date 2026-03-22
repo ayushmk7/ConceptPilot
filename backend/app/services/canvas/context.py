@@ -128,8 +128,7 @@ async def assemble_context(
                         ],
                     }
                 )
-        # Simplified truncation: keep the tail of each half.
-        # A per-node cap would be more precise but this is sufficient for hackathon.
+
         elif source.type == "artifact":
             artifact_msg = (
                 await db.execute(
@@ -156,6 +155,8 @@ async def assemble_context(
     messages = linked_messages + own_history
 
     # Step 5 — truncation
+    # Simplified truncation: keep the tail of each half.
+    # A per-node cap would be more precise but this is sufficient for hackathon.
     context_truncated = False
     if len(messages) > 150:
         own_history = own_history[-50:]
