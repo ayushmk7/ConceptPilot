@@ -408,10 +408,9 @@ Defined in `services/canvas/skills.py` as a static dict keyed by skill name:
 |---|---|
 | `Tutor` | Patient explanation, step-by-step |
 | `Socratic` | Answers questions with questions |
-| `Devil's Advocate` | Challenges assumptions |
-| `Code Coach` | Focused on code review and debugging |
-| `Study Buddy` | Casual, encouraging, test-prep focused |
 | `Research Assistant` | Summarizes, cites, structures information |
+
+> **Hackathon decision:** Reduced from 6 skills to 3. Removed: Devil's Advocate, Code Coach, Study Buddy.
 
 ---
 
@@ -568,22 +567,26 @@ The mock can stay as a fallback (e.g., when `NEXT_PUBLIC_API_URL` is not set) bu
 
 Build in this sequence. Each step is independently testable.
 
-### Phase 1 — Backend Scaffold (testable via curl)
+### Phase 1 — Backend Scaffold (testable via curl) ✅ DONE
 
-1. Add canvas models to `models/canvas.py`
-2. Create Alembic migration for canvas tables
-3. Create `routers/canvas.py` with project + node + edge CRUD only (no chat, no WebSocket yet)
+1. ✅ Add canvas models to `models/canvas.py`
+2. ✅ Create Alembic migration for canvas tables
+3. ✅ Create `routers/canvas.py` with project + node + edge CRUD only (no chat, no WebSocket yet)
 4. Mount router in `main.py`
-5. Add canvas env vars to `config.py` and `.env.example`
+5. ✅ Add canvas env vars to `config.py` and `.env.example`
 6. **Test**: `POST /api/canvas/projects` → `POST /api/canvas/projects/:id/nodes` → `GET /api/canvas/projects/:id`
 
 ### Phase 2 — Streaming Chat (testable via curl + EventSource)
 
-1. Create `services/canvas/skills.py` (static dict of 6 skill prompts)
+1. Create `services/canvas/skills.py` (3 skills only: Tutor, Socratic, Research Assistant)
 2. Create `services/canvas/context.py` (context assembly — builds messages array from linked nodes)
-3. Create `services/canvas/claude.py` (Anthropic streaming wrapper)
+3. Create `services/canvas/claude.py` (Anthropic streaming wrapper — no tool handling for hackathon)
 4. Add `POST /api/canvas/nodes/:id/messages` SSE endpoint to `routers/canvas.py`
 5. **Test**: `curl -N -X POST .../messages` → see SSE tokens streaming
+
+> **Hackathon scope decisions:**
+> - Tools (`create_branches`, `generate_quiz`, etc.) — **SKIPPED**, too complex under time pressure
+> - Skills reduced to 3: **Tutor**, **Socratic**, **Research Assistant**
 
 ### Phase 3 — Frontend Canvas Route
 

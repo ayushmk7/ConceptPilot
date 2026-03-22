@@ -68,16 +68,18 @@ async def stream_canvas_response(
         )
         db.add(assistant_msg)
         await db.flush()
+        await db.commit()
 
-        yield f"data: {json.dumps({
-            'type': 'done',
-            'message_id': str(assistant_msg.id),
-            'usage': {
-                'input_tokens': final.usage.input_tokens,
-                'output_tokens': final.usage.output_tokens,
+        done_event = {
+            "type": "done",
+            "message_id": str(assistant_msg.id),
+            "usage": {
+                "input_tokens": final.usage.input_tokens,
+                "output_tokens": final.usage.output_tokens,
             },
-            'context_truncated': context_truncated,
-        })}\n\n"
+            "context_truncated": context_truncated,
+        }
+        yield f"data: {json.dumps(done_event)}\n\n"
 
     except Exception as e:
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"

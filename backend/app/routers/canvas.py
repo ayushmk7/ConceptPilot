@@ -1,12 +1,14 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional
 
 from app.database import get_db
-from app.models.canvas import CanvasProject, CanvasNode, CanvasEdge
+from app.models.canvas import CanvasProject, CanvasNode, CanvasEdge, CanvasMessage
+from app.services.canvas.claude import stream_canvas_response
 
 router = APIRouter()
 
@@ -36,6 +38,11 @@ class EdgeCreate(BaseModel):
     target_node_id: UUID
 
 
+class MessageCreate(BaseModel):
+    content: str
+    session_id: str
+
+
 def _node_dict(node: CanvasNode) -> dict:
     return {
         "id": str(node.id),
@@ -58,6 +65,16 @@ def _edge_dict(edge: CanvasEdge) -> dict:
         "source_node_id": str(edge.source_node_id),
         "target_node_id": str(edge.target_node_id),
         "created_at": edge.created_at.isoformat(),
+    }
+
+
+def _message_dict(msg: CanvasMessage) -> dict:
+    return {
+        "id": str(msg.id),
+        "node_id": str(msg.node_id),
+        "role": msg.role,
+        "content": msg.content,
+        "created_at": msg.created_at.isoformat(),
     }
 
 
@@ -181,3 +198,35 @@ async def delete_edge(edge_id: UUID, db: AsyncSession = Depends(get_db)):
     if not edge:
         raise HTTPException(status_code=404, detail="Edge not found")
     await db.delete(edge)
+
+
+@router.get("/nodes/{node_id}/messages")
+async def list_messages(node_id: UUID, db: AsyncSession = Depends(get_db)):
+    node = await db.get(CanvasNode, node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    msgs = (
+        await db.execute(
+            select(CanvasMessage)
+            .where(CanvasMessage.node_id == node_id)
+            .order_by(CanvasMessage.created_at)
+        )
+    ).scalars().all()
+
+    return [_message_dict(m) for m in msgs]
+
+
+@router.post("/nodes/{node_id}/messages")
+async def send_message(
+    node_id: UUID, body: MessageCreate, db: AsyncSession = Depends(get_db)
+):
+    node = await db.get(CanvasNode, node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    async def event_stream():
+        async for chunk in stream_canvas_response(node_id, body.content, body.session_id, db):
+            yield chunk
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
