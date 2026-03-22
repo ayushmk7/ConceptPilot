@@ -2,6 +2,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, BarChart3, BookOpen, GraduationCap, ShieldCheck } from 'lucide-react';
 import { WaveDivider } from '@/components/svg/WaveDivider';
+import { SplitText } from '@/components/animations/SplitText';
+import { StreakingLines } from '@/components/animations/StreakingLines';
 
 
 export default function LandingPage() {
@@ -16,26 +18,25 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <div className="relative bg-gradient-to-br from-primary via-primary/90 to-chart-2 overflow-hidden">
+      <div className="relative bg-primary overflow-hidden">
+        <StreakingLines className="absolute inset-0 z-0 w-full h-full" />
 
-        <div className="relative max-w-4xl mx-auto text-center px-6 pt-20 pb-24">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/15 text-white/80 text-sm mb-6 animate-fade-in">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-            AI-powered concept readiness analytics
-          </div>
-          <h1 className="text-3xl md:text-[2.75rem] md:leading-tight font-semibold text-white mb-5 animate-fade-in-up">
-            Turn exams into{' '}
-            <span className="text-accent">conceptual insight</span>
+        <div className="relative z-10 min-h-[85vh] flex flex-col items-center justify-center px-6 pt-20 pb-24 text-center">
+          <h1 className="mb-0">
+            <SplitText
+              text="ConceptPilot"
+              className="text-6xl md:text-8xl lg:text-9xl font-extrabold text-white tracking-tight"
+            />
           </h1>
-          <p className="text-base md:text-lg text-white/70 mb-12 max-w-2xl mx-auto animate-fade-in-up delay-100">
+          <div className="h-1.5 w-32 bg-accent rounded-full mx-auto mt-4 mb-6" />
+          <p className="text-lg md:text-xl text-white/70 max-w-2xl mx-auto mb-10">
             Upload exam data, map concepts, and get explainable readiness analytics — for instructors and students alike.
           </p>
 
-          {/* Role selection buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up delay-200">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/dashboard"
-              className="group inline-flex items-center gap-2.5 px-7 py-3 rounded-xl bg-transparent border-2 border-accent text-white font-semibold text-base hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:bg-accent/25 transition-all hover:scale-[1.02] hover:shadow-lg"
+              className="group inline-flex items-center gap-2.5 px-7 py-3 rounded-full bg-accent text-primary font-semibold text-base hover:shadow-lg hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:bg-accent/90 transition-all"
             >
               <ShieldCheck className="w-5 h-5" />
               Instructors
@@ -44,7 +45,7 @@ export default function LandingPage() {
 
             <Link
               href="/student"
-              className="group inline-flex items-center gap-2.5 px-7 py-3 rounded-xl bg-transparent border-2 border-chart-5 text-white font-semibold text-base hover:bg-chart-5/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-chart-5 focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:bg-chart-5/25 transition-all hover:scale-[1.02] hover:shadow-lg"
+              className="group inline-flex items-center gap-2.5 px-7 py-3 rounded-full bg-transparent border-2 border-white text-white font-semibold text-base hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:bg-white/20 transition-all hover:scale-[1.02] hover:shadow-lg"
             >
               <GraduationCap className="w-5 h-5" />
               Students
