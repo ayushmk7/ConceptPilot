@@ -1,40 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { StudentLayout } from '@/components/StudentLayout';
 import { DotPattern } from '@/components/svg/DotPattern';
 import { BookOpen, CheckCircle2, Circle, ChevronRight, Headphones, Presentation, Video } from 'lucide-react';
 import Link from 'next/link';
-import { PageLoader } from '@/components/LoadingSkeleton';
-import { ErrorState } from '@/components/ErrorBoundary';
-import * as api from '@/lib/api';
-import type { StudyPlanStep } from '@/lib/types';
 import { readinessColorFromScore } from '@/lib/theme-colors';
+import { MOCK_STUDY_PLAN } from '@/lib/mock-data';
 
 export default function StudyPlan() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [plan, setPlan] = useState<StudyPlanStep[]>([]);
-
-  useEffect(() => {
-    loadPlan();
-  }, []);
-
-  const loadPlan = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.getStudyPlan('', '');
-      setPlan(data);
-    } catch {
-      setError('Failed to load study plan. Open your access link again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) return <StudentLayout><PageLoader message="Loading your study plan..." /></StudentLayout>;
-  if (error) return <StudentLayout><ErrorState message={error} onRetry={loadPlan} /></StudentLayout>;
+  const plan = MOCK_STUDY_PLAN;
 
   return (
     <StudentLayout>

@@ -76,8 +76,6 @@ def _validate_production_rules(settings) -> list[str]:
         errors.append(
             "APP_ENV=production requires CORS_ALLOWED_ORIGINS to be explicit (not empty or '*')"
         )
-    if settings.INSTRUCTOR_USERNAME == "admin" and settings.INSTRUCTOR_PASSWORD == "admin":
-        errors.append("APP_ENV=production cannot use default instructor admin/admin")
     if settings.COMPUTE_ASYNC_ENABLED:
         if settings.COMPUTE_QUEUE_BACKEND != "redis":
             errors.append(
@@ -209,8 +207,6 @@ async def async_main(env_file: Path) -> int:
     for key in (
         "DATABASE_URL",
         "ANTHROPIC_API_KEY",
-        "INSTRUCTOR_USERNAME",
-        "INSTRUCTOR_PASSWORD",
         "CORS_ALLOWED_ORIGINS",
         "ELEVENLABS_API_KEY",
         "ELEVENLABS_VOICE_ID",

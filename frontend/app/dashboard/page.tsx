@@ -1,105 +1,41 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { InstructorLayout } from '@/components/InstructorLayout';
 import { AlertTriangle, Users, BookOpen, Bell, Lightbulb, Settings2, X, Check, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { DotPattern } from '@/components/svg/DotPattern';
-import { DashboardSkeleton } from '@/components/LoadingSkeleton';
-import { ErrorState } from '@/components/ErrorBoundary';
-import * as api from '@/lib/api';
-import type { Alert, Intervention, Cluster, ReadinessParams } from '@/lib/types';
-import { useExam } from '@/lib/exam-context';
+import type { ReadinessParams } from '@/lib/types';
 import { readinessColorsJs, themeColor } from '@/lib/theme-colors';
+import {
+  MOCK_HEATMAP_DATA,
+  MOCK_ALERTS,
+  MOCK_INTERVENTIONS,
+  MOCK_CLUSTERS,
+  MOCK_PARAMS,
+  MOCK_TOTAL_STUDENTS,
+} from '@/lib/mock-data';
 
 const readinessColors = [...readinessColorsJs];
 const readinessLabels = ['0-0.2', '0.2-0.4', '0.4-0.6', '0.6-0.8', '0.8-1.0'];
 
 export default function Dashboard() {
-  const {
-    courses,
-    exams,
-    selectedCourseId,
-    selectedExamId,
-    setSelectedCourseId,
-    setSelectedExamId,
-    loading: examCtxLoading,
-    error: examCtxError,
-  } = useExam();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [heatmapData, setHeatmapData] = useState<{ name: string; conceptId: string; readiness: number[] }[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [interventions, setInterventions] = useState<Intervention[]>([]);
-  const [clusters, setClusters] = useState<Cluster[]>([]);
-  const [params, setParams] = useState<ReadinessParams>({ alpha: 0.5, beta: 0.3, gamma: 0.2, threshold: 0.6, k: 3 });
+  const heatmapData = MOCK_HEATMAP_DATA;
+  const alerts = MOCK_ALERTS;
+  const interventions = MOCK_INTERVENTIONS;
+  const clusters = MOCK_CLUSTERS;
+  const [params, setParams] = useState<ReadinessParams>(MOCK_PARAMS);
   const [showParamEditor, setShowParamEditor] = useState(false);
   const [editParams, setEditParams] = useState<ReadinessParams>(params);
   const [savingParams, setSavingParams] = useState(false);
-  const [totalStudents, setTotalStudents] = useState(0);
-
-  useEffect(() => {
-    if (examCtxLoading || !selectedExamId) {
-      if (!examCtxLoading && !selectedExamId) setLoading(false);
-      return;
-    }
-    loadData();
-  }, [examCtxLoading, selectedExamId]);
-
-  const loadData = async () => {
-    if (!selectedExamId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const [hm, al, iv, cl, p, students] = await Promise.all([
-        api.getHeatmapData(selectedExamId),
-        api.getAlerts(selectedExamId),
-        api.getInterventions(selectedExamId),
-        api.getClusters(selectedExamId),
-        api.getReadinessParams(selectedExamId),
-        api.getStudentsList(selectedExamId),
-      ]);
-      setHeatmapData(hm);
-      setAlerts(al);
-      setInterventions(iv);
-      setClusters(cl);
-      setParams(p);
-      setEditParams(p);
-      setTotalStudents(students.length);
-    } catch {
-      setError('Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const totalStudents = MOCK_TOTAL_STUDENTS;
 
   const handleSaveParams = async () => {
-    if (!selectedExamId) return;
     setSavingParams(true);
-    try {
-      const updated = await api.updateReadinessParams(selectedExamId, editParams);
-      setParams(updated);
-      setShowParamEditor(false);
-    } catch {
-      // handled
-    } finally {
-      setSavingParams(false);
-    }
+    setParams(editParams);
+    setShowParamEditor(false);
+    setSavingParams(false);
   };
-
-  if (examCtxLoading) return <InstructorLayout><DashboardSkeleton /></InstructorLayout>;
-  if (examCtxError) return <InstructorLayout><ErrorState message={examCtxError} onRetry={() => window.location.reload()} /></InstructorLayout>;
-  if (!selectedExamId) {
-    return (
-      <InstructorLayout>
-        <div className="max-w-3xl mx-auto px-6 py-16 text-center text-secondary-text">
-          <p className="mb-4">Create a course and exam from the upload wizard, or select an exam below once courses load.</p>
-        </div>
-      </InstructorLayout>
-    );
-  }
-  if (loading) return <InstructorLayout><DashboardSkeleton /></InstructorLayout>;
-  if (error) return <InstructorLayout><ErrorState message={error} onRetry={loadData} /></InstructorLayout>;
 
   const stats = [
     { label: 'Total Students', value: String(totalStudents), icon: Users, color: themeColor.chart5, bg: 'rgb(239 246 255)' },
@@ -118,24 +54,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-2 animate-fade-in">
             <h1 className="text-2xl font-semibold text-primary">Readiness Analytics</h1>
             <div className="flex items-center gap-3">
-              <select
-                value={selectedCourseId ?? ''}
-                onChange={(e) => setSelectedCourseId(e.target.value || null)}
-                className="px-3 py-1.5 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white shadow-sm"
-              >
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <select
-                value={selectedExamId ?? ''}
-                onChange={(e) => setSelectedExamId(e.target.value || null)}
-                className="px-3 py-1.5 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white shadow-sm"
-              >
-                {exams.map((ex) => (
-                  <option key={ex.id} value={ex.id}>{ex.name}</option>
-                ))}
-              </select>
+              <span className="text-sm text-muted-foreground">EECS 280 &bull; Midterm 1</span>
             </div>
           </div>
           <p className="text-sm text-muted-foreground mb-8 animate-fade-in">Overview of concept readiness across your class</p>
@@ -162,16 +81,8 @@ export default function Dashboard() {
 
           {/* Heatmap */}
           <div className="card-elevated p-6 mb-6 animate-fade-in-up delay-200">
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4">
               <h2 className="text-lg font-semibold text-primary">Readiness Heatmap</h2>
-              <div className="flex items-center gap-2 text-xs">
-                {readinessLabels.map((label, idx) => (
-                  <div key={label} className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: readinessColors[idx] }} />
-                    <span className="text-secondary-text">{label}</span>
-                  </div>
-                ))}
-              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -200,8 +111,13 @@ export default function Dashboard() {
                       {concept.readiness.map((count, idx) => (
                         <td key={idx} className="py-2.5 px-3 text-center">
                           <div
-                            className="inline-flex items-center justify-center min-w-[40px] px-2 py-1 rounded-md text-xs font-medium text-white transition-transform hover:scale-105"
-                            style={{ backgroundColor: readinessColors[idx] }}
+                            className="inline-flex items-center justify-center min-w-[40px] px-2 py-1 rounded-xl text-xs font-semibold backdrop-blur-md border transition-transform hover:scale-105"
+                            style={{
+                              backgroundColor: `${readinessColors[idx]}18`,
+                              borderColor: `${readinessColors[idx]}30`,
+                              color: readinessColors[idx],
+                              boxShadow: `0 2px 12px ${readinessColors[idx]}12`,
+                            }}
                           >
                             {count}
                           </div>

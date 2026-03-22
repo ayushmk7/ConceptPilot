@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { Course, Exam } from './types';
 import * as api from './api';
-import { useAuth } from './auth-context';
 
 const STORAGE_KEY = 'conceptpilot_exam_selection';
 
@@ -36,7 +35,6 @@ function readSaved(): { courseId: string | null; examId: string | null } {
 }
 
 export function ExamProvider({ children }: { children: React.ReactNode }) {
-  const { token: authToken, isLoading: authLoading } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [selectedCourseId, setSelectedCourseIdState] = useState<string | null>(null);
@@ -53,14 +51,23 @@ export function ExamProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const cs = await api.getCourses();
-      setCourses(cs);
       const saved = readSaved();
+      const savedCourseId = saved.courseId;
+
+      // Fetch courses and exams in parallel when we have a saved course
+      const [cs, prefetchedExams] = await Promise.all([
+        api.getCourses(),
+        savedCourseId ? api.getExams(savedCourseId).catch(() => null) : Promise.resolve(null),
+      ]);
+      setCourses(cs);
+
       const courseId =
-        saved.courseId && cs.some((c) => c.id === saved.courseId) ? saved.courseId : cs[0]?.id ?? null;
+        savedCourseId && cs.some((c) => c.id === savedCourseId) ? savedCourseId : cs[0]?.id ?? null;
       setSelectedCourseIdState(courseId);
+
       if (courseId) {
-        const ex = await api.getExams(courseId);
+        // Use prefetched exams if they match, otherwise fetch
+        const ex = (courseId === savedCourseId && prefetchedExams) ? prefetchedExams : await api.getExams(courseId);
         setExams(ex);
         const examId =
           saved.examId && ex.some((e) => e.id === saved.examId) ? saved.examId : ex[0]?.id ?? null;
@@ -78,17 +85,8 @@ export function ExamProvider({ children }: { children: React.ReactNode }) {
   }, [persist]);
 
   useEffect(() => {
-    if (authLoading) return;
-    if (authToken?.startsWith('student_token_')) {
-      setLoading(false);
-      setCourses([]);
-      setExams([]);
-      setSelectedCourseIdState(null);
-      setSelectedExamIdState(null);
-      return;
-    }
     refresh();
-  }, [authLoading, authToken, refresh]);
+  }, [refresh]);
 
   useEffect(() => {
     if (!selectedCourseId) {
@@ -137,10 +135,12 @@ export function ExamProvider({ children }: { children: React.ReactNode }) {
   const createCourse = useCallback(
     async (name: string) => {
       const c = await api.createCourse(name);
-      const cs = await api.getCourses();
+      const [cs, ex] = await Promise.all([
+        api.getCourses(),
+        api.getExams(c.id),
+      ]);
       setCourses(cs);
       setSelectedCourseIdState(c.id);
-      const ex = await api.getExams(c.id);
       setExams(ex);
       const firstExam = ex[0]?.id ?? null;
       setSelectedExamIdState(firstExam);
@@ -154,8 +154,8 @@ export function ExamProvider({ children }: { children: React.ReactNode }) {
     async (name: string) => {
       if (!selectedCourseId) throw new Error('Select a course first');
       const e = await api.createExam(selectedCourseId, name);
-      const ex = await api.getExams(selectedCourseId);
-      setExams(ex);
+      // Optimistically add the new exam instead of refetching the full list
+      setExams((prev) => [...prev, e]);
       setSelectedExamIdState(e.id);
       persist(selectedCourseId, e.id);
       return e;

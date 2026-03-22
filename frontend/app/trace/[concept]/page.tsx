@@ -1,17 +1,46 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { InstructorLayout } from '@/components/InstructorLayout';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ChevronLeft, Loader2, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { DotPattern } from '@/components/svg/DotPattern';
-import { PageLoader } from '@/components/LoadingSkeleton';
+import { Skeleton } from '@/components/LoadingSkeleton';
 import { ErrorState } from '@/components/ErrorBoundary';
 import * as api from '@/lib/api';
 import { useExam } from '@/lib/exam-context';
 import { themeColor } from '@/lib/theme-colors';
+
+const LazyRecharts = lazy(() =>
+  import('recharts').then((m) => ({
+    default: ({ data, themeColor: tc }: { data: { name: string; value: number; color: string }[]; themeColor: typeof themeColor }) => (
+      <m.ResponsiveContainer width="100%" height={300}>
+        <m.BarChart data={data}>
+          <m.CartesianGrid strokeDasharray="3 3" stroke={tc.border} />
+          <m.XAxis dataKey="name" tick={{ fontSize: 12, fill: tc.secondaryText }} />
+          <m.YAxis tick={{ fontSize: 12, fill: tc.secondaryText }} domain={[-0.2, 1]} />
+          <m.Tooltip
+            contentStyle={{
+              backgroundColor: tc.foreground,
+              border: 'none',
+              borderRadius: '10px',
+              color: tc.white,
+              fontSize: '12px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            }}
+            formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, '']}
+          />
+          <m.Bar dataKey="value" radius={[6, 6, 0, 0]}>
+            {data.map((entry, index) => (
+              <m.Cell key={`cell-${index}`} fill={entry.color} />
+            ))}
+          </m.Bar>
+        </m.BarChart>
+      </m.ResponsiveContainer>
+    ),
+  }))
+);
 
 export default function RootCauseTrace() {
   const { selectedExamId, loading: examLoading } = useExam();
@@ -43,20 +72,13 @@ export default function RootCauseTrace() {
     }
   };
 
-  if (examLoading || !selectedExamId) {
-    return (
-      <InstructorLayout>
-        <PageLoader message="Select an exam from the dashboard first." />
-      </InstructorLayout>
-    );
-  }
+  if (error || (!loading && !traceData)) return <InstructorLayout><ErrorState message={error || 'No data'} onRetry={loadTrace} /></InstructorLayout>;
 
-  if (loading) return <InstructorLayout><PageLoader message={`Loading trace for ${conceptName}...`} /></InstructorLayout>;
-  if (error || !traceData) return <InstructorLayout><ErrorState message={error || 'No data'} onRetry={loadTrace} /></InstructorLayout>;
+  const isReady = !examLoading && selectedExamId && !loading && traceData;
 
-  const filteredStudents = traceData.affectedStudents.filter((s) =>
+  const filteredStudents = isReady ? traceData.affectedStudents.filter((s) =>
     s.name.toLowerCase().includes(studentSearch.toLowerCase())
-  );
+  ) : [];
 
   return (
     <InstructorLayout>
@@ -73,6 +95,21 @@ export default function RootCauseTrace() {
             <p className="text-sm text-muted-foreground mt-1">Understand how readiness is computed for this concept.</p>
           </div>
 
+          {!isReady ? (
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+              <div className="md:col-span-3 card-elevated p-6">
+                <Skeleton className="h-6 w-48 mb-6" />
+                <Skeleton className="h-[300px] w-full mb-6" />
+                <div className="grid grid-cols-4 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+                </div>
+              </div>
+              <div className="md:col-span-2 space-y-6">
+                <div className="card-elevated p-6"><Skeleton className="h-5 w-40 mb-4" /><Skeleton className="h-20 w-full" /></div>
+                <div className="card-elevated p-6"><Skeleton className="h-5 w-40 mb-4" /><Skeleton className="h-20 w-full" /></div>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
             {/* Waterfall chart */}
             <div className="md:col-span-3 card-elevated p-6 animate-fade-in-up delay-100">
@@ -93,29 +130,9 @@ export default function RootCauseTrace() {
                 </select>
               </div>
 
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={traceData.waterfall}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeColor.border} />
-                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: themeColor.secondaryText }} />
-                  <YAxis tick={{ fontSize: 12, fill: themeColor.secondaryText }} domain={[-0.2, 1]} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: themeColor.foreground,
-                      border: 'none',
-                      borderRadius: '10px',
-                      color: themeColor.white,
-                      fontSize: '12px',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                    }}
-                    formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, '']}
-                  />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                    {traceData.waterfall.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
+                <LazyRecharts data={traceData.waterfall} themeColor={themeColor} />
+              </Suspense>
 
               <div className="mt-6 grid grid-cols-4 gap-3">
                 {traceData.waterfall.map((item) => (
@@ -226,6 +243,7 @@ export default function RootCauseTrace() {
               </div>
             </div>
           </div>
+          )}
         </div>
       </div>
     </InstructorLayout>

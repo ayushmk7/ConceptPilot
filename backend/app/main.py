@@ -46,12 +46,6 @@ def _validate_production_config() -> None:
             "(got '*' or empty).  Example: https://app.conceptpilot.com"
         )
 
-    if settings.INSTRUCTOR_USERNAME == "admin" and settings.INSTRUCTOR_PASSWORD == "admin":
-        raise RuntimeError(
-            "Default instructor credentials (admin/admin) cannot be used in production. "
-            "Set INSTRUCTOR_USERNAME and INSTRUCTOR_PASSWORD to strong values."
-        )
-
     if settings.COMPUTE_ASYNC_ENABLED:
         if settings.COMPUTE_QUEUE_BACKEND != "redis":
             raise RuntimeError(

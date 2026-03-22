@@ -154,23 +154,6 @@ export interface MultiplayerEvent {
   timestamp: string;
 }
 
-// ── Auth Types ──
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'instructor' | 'student';
-  avatarUrl?: string;
-}
-
-export interface AuthState {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  token: string | null;
-}
-
 // ── API Types ──
 
 export interface ApiResponse<T> {

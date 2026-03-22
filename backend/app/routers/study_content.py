@@ -11,7 +11,6 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import Exam, StudyContent
 from app.rate_limit import enforce_instructor_write_limit
@@ -52,7 +51,6 @@ async def create_study_content(
     body: StudyContentCreateRequest,
     db: AsyncSession = Depends(get_db),
     _rl: None = Depends(enforce_instructor_write_limit),
-    _user: str = Depends(get_current_instructor),
 ):
     exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
     if not exam_result.scalar_one_or_none():
@@ -79,7 +77,6 @@ async def create_study_content(
 async def list_study_content_for_exam(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
     if not exam_result.scalar_one_or_none():
@@ -88,7 +85,7 @@ async def list_study_content_for_exam(
     result = await db.execute(
         select(StudyContent)
         .where(StudyContent.exam_id == exam_id)
-        .order_by(StudyContent.created_at.desc())
+        .order_by(StudyContent.created_at.desc()),
     )
     rows = result.scalars().all()
     return StudyContentListResponse(items=[_to_response(row) for row in rows])
@@ -98,7 +95,6 @@ async def list_study_content_for_exam(
 async def get_study_content(
     content_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     result = await db.execute(select(StudyContent).where(StudyContent.id == content_id))
     item = result.scalar_one_or_none()
@@ -111,7 +107,6 @@ async def get_study_content(
 async def download_study_content(
     content_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     result = await db.execute(select(StudyContent).where(StudyContent.id == content_id))
     item = result.scalar_one_or_none()
@@ -143,7 +138,6 @@ async def download_study_content(
 async def stream_study_content(
     content_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     response = await download_study_content(content_id=content_id, db=db, _user=_user)
     if isinstance(response, FileResponse):

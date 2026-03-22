@@ -35,64 +35,15 @@ import {
   API_BASE,
   COMPUTE_POLL_INTERVAL_MS,
   COMPUTE_POLL_MAX_ATTEMPTS,
-  STORAGE_INSTRUCTOR_PASS_KEY,
-  STORAGE_INSTRUCTOR_USER_KEY,
 } from './config';
 import { getReportConfigs as getReportConfigsList } from './report-config';
 
 export { API_BASE } from './config';
 
-const BASIC_USER_KEY = STORAGE_INSTRUCTOR_USER_KEY;
-const BASIC_PASS_KEY = STORAGE_INSTRUCTOR_PASS_KEY;
-
 export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
-  skipAuth?: boolean;
   /** When set, serializes to JSON and sends as body (unless `body` is also set). */
   jsonBody?: unknown;
   body?: RequestInit['body'];
-}
-
-function getEnvBasic(): { user: string; pass: string } | null {
-  const u = process.env.NEXT_PUBLIC_INSTRUCTOR_USERNAME;
-  const p = process.env.NEXT_PUBLIC_INSTRUCTOR_PASSWORD;
-  if (u && p) return { user: u, pass: p };
-  return null;
-}
-
-function getSessionBasic(): { user: string; pass: string } | null {
-  if (typeof window === 'undefined') return null;
-  const user = sessionStorage.getItem(BASIC_USER_KEY) ?? localStorage.getItem(BASIC_USER_KEY);
-  const pass = sessionStorage.getItem(BASIC_PASS_KEY) ?? localStorage.getItem(BASIC_PASS_KEY);
-  if (user && pass) return { user, pass };
-  return null;
-}
-
-/** Instructor HTTP Basic header (dev backend often ignores auth). */
-export function getAuthHeaders(): Record<string, string> {
-  const creds = getSessionBasic() ?? getEnvBasic();
-  if (!creds) return {};
-  const raw = `${creds.user}:${creds.pass}`;
-  const token =
-    typeof window !== 'undefined'
-      ? btoa(raw)
-      : Buffer.from(raw, 'utf8').toString('base64');
-  return { Authorization: `Basic ${token}` };
-}
-
-export function storeInstructorBasic(user: string, pass: string): void {
-  if (typeof window === 'undefined') return;
-  sessionStorage.setItem(BASIC_USER_KEY, user);
-  sessionStorage.setItem(BASIC_PASS_KEY, pass);
-  localStorage.setItem(BASIC_USER_KEY, user);
-  localStorage.setItem(BASIC_PASS_KEY, pass);
-}
-
-export function clearInstructorBasic(): void {
-  if (typeof window === 'undefined') return;
-  sessionStorage.removeItem(BASIC_USER_KEY);
-  sessionStorage.removeItem(BASIC_PASS_KEY);
-  localStorage.removeItem(BASIC_USER_KEY);
-  localStorage.removeItem(BASIC_PASS_KEY);
 }
 
 function parseErrorMessage(body: unknown, fallback: string): string {
@@ -109,16 +60,11 @@ function parseErrorMessage(body: unknown, fallback: string): string {
 }
 
 /**
- * Unified fetch for JSON APIs. Use `skipAuth` for public student report routes.
+ * Unified fetch for JSON APIs.
  */
 export async function apiFetch<T = unknown>(path: string, init: ApiFetchOptions = {}): Promise<T> {
-  const { skipAuth = false, jsonBody, headers: initHeaders, body: initBody, ...rest } = init;
+  const { jsonBody, headers: initHeaders, body: initBody, ...rest } = init;
   const headers = new Headers(initHeaders as HeadersInit);
-
-  if (!(skipAuth ?? false)) {
-    const auth = getAuthHeaders();
-    Object.entries(auth).forEach(([k, v]) => headers.set(k, v));
-  }
 
   let body: BodyInit | null | undefined = initBody ?? null;
   if (jsonBody !== undefined && initBody === undefined) {
@@ -166,83 +112,12 @@ async function request<T>(path: string, options?: ApiFetchOptions): Promise<T> {
   return apiFetch<T>(path, options);
 }
 
-// ── Auth ──
+// ── Student Reports ──
 
-export async function login(email: string, password: string) {
-  storeInstructorBasic(email, password);
-  try {
-    await apiFetch<unknown[]>('/api/v1/courses', { skipAuth: false });
-  } catch {
-    clearInstructorBasic();
-    throw new Error('Invalid credentials or API unreachable');
-  }
-  const user = {
-    id: 'instructor',
-    name: email.split('@')[0] || 'Instructor',
-    email,
-    role: 'instructor' as const,
-  };
-  const token = `instructor_session_${Date.now()}`;
-  return { user, token };
-}
-
-export async function validateToken(token: string) {
-  if (token.startsWith('student_token_')) {
-    const raw = token.slice('student_token_'.length);
-    const cached = getCachedStudentReport();
-    if (cached) {
-      return {
-        id: cached.student_id,
-        name: `Student ${cached.student_id}`,
-        email: '',
-        role: 'student' as const,
-      };
-    }
-    try {
-      await validateStudentToken(raw);
-      const r = getCachedStudentReport();
-      if (r) {
-        return {
-          id: r.student_id,
-          name: `Student ${r.student_id}`,
-          email: '',
-          role: 'student' as const,
-        };
-      }
-    } catch {
-      return null;
-    }
-    return null;
-  }
-  if (!token.startsWith('instructor_session')) {
-    return null;
-  }
-  try {
-    await apiFetch<unknown[]>('/api/v1/courses');
-    return {
-      id: 'instructor',
-      name: 'Instructor',
-      email: typeof window !== 'undefined' ? sessionStorage.getItem(BASIC_USER_KEY) ?? '' : '',
-      role: 'instructor' as const,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export async function validateStudentToken(token: string) {
-  const data = await apiFetch<StudentReportResponse>(`/api/v1/reports/${encodeURIComponent(token)}`, {
-    skipAuth: true,
-  });
+export async function fetchStudentReport(token: string): Promise<StudentReportResponse> {
+  const data = await apiFetch<StudentReportResponse>(`/api/v1/reports/${encodeURIComponent(token)}`);
   setStudentSession(token, data);
-  return {
-    id: data.student_id,
-    name: `Student ${data.student_id}`,
-    email: '',
-    role: 'student' as const,
-    courseId: '',
-    examId: data.exam_id,
-  };
+  return data;
 }
 
 export function getStudentReportFromCache(): StudentReportResponse | null {
@@ -901,7 +776,7 @@ export async function getStudentReadiness(_studentId: string, _examId: string): 
   if (!token) throw { status: 401, message: 'Not signed in with a report link' } as ApiError;
   const raw = getCachedStudentReport();
   if (raw) return reportToStudentReadiness(raw);
-  const r = await apiFetch<StudentReportResponse>(`/api/v1/reports/${encodeURIComponent(token)}`, { skipAuth: true });
+  const r = await apiFetch<StudentReportResponse>(`/api/v1/reports/${encodeURIComponent(token)}`);
   return reportToStudentReadiness(r);
 }
 
@@ -991,9 +866,9 @@ export function getStudyContentDownloadUrl(contentId: string): string {
   return `${API_BASE}/api/v1/study-content/${contentId}/download`;
 }
 
-/** Fetch binary with instructor Basic auth (for <a> links that cannot attach headers). */
+/** Fetch binary blob from an API endpoint. */
 export async function fetchAuthorizedBlob(path: string): Promise<Blob> {
-  const res = await fetch(`${API_BASE}${path}`, { headers: getAuthHeaders() });
+  const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) {
     const t = await res.text();
     throw new Error(t || res.statusText);

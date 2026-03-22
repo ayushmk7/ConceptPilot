@@ -55,13 +55,6 @@ class Settings(BaseSettings):
     RATE_LIMIT_DAILY: int = 100
     RATE_LIMIT_COOLDOWN_SECONDS: int = 2
 
-    # --- Instructor auth (MVP: basic auth) ---
-    INSTRUCTOR_USERNAME: str = "admin"
-    INSTRUCTOR_PASSWORD: str = "admin"
-
-    # --- Student tokens ---
-    STUDENT_TOKEN_EXPIRY_DAYS: int = 30
-
     # --- Exports ---
     EXPORT_DIR: str = "/tmp/conceptpilot_exports"
 

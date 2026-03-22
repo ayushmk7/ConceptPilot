@@ -18,10 +18,11 @@ export default function StudentUpload() {
 
   const handleAnalyze = () => {
     setProcessing(true);
-    setTimeout(() => {
+    // Brief visual feedback then complete
+    requestAnimationFrame(() => {
       setProcessing(false);
       setDone(true);
-    }, 2000);
+    });
   };
 
   return (

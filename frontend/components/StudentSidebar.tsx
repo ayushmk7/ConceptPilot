@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, FileText, BookOpen, Headphones, ChevronRight, ChevronLeft, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Upload, FileText, BookOpen, Headphones, ChevronRight, ChevronLeft, MessageSquare, GitBranch } from 'lucide-react';
 
 export function StudentSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -11,10 +11,11 @@ export function StudentSidebar() {
 
   const menuItems = [
     { path: '/student', label: 'Overview', icon: LayoutDashboard, exact: true },
+    { path: '/student/upload', label: 'Upload Test', icon: Upload },
     { path: '/student/report', label: 'My Report', icon: FileText },
     { path: '/student/study-plan', label: 'Study Plan', icon: BookOpen },
     { path: '/student/study-content', label: 'Study Content', icon: Headphones },
-    { path: '/student/upload', label: 'Upload Test', icon: Upload },
+    { path: '/student/graph', label: 'Graph Editor', icon: GitBranch },
     { path: '/canvas', label: 'Canvas', icon: MessageSquare, href: '/canvas?role=student' },
   ];
 
@@ -50,15 +51,6 @@ export function StudentSidebar() {
           })}
         </nav>
 
-        {/* Info box */}
-        {!isCollapsed && (
-          <div className="mx-4 mt-8 p-4 bg-muted rounded-xl border border-chart-5/10">
-            <p className="text-xs font-medium text-chart-2 mb-1">Your readiness report</p>
-            <p className="text-[11px] text-secondary-text leading-relaxed">
-              This report is private to you. No peer comparisons or rankings are shown.
-            </p>
-          </div>
-        )}
       </div>
 
       {!isCollapsed && (

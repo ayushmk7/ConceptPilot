@@ -32,11 +32,8 @@ export function Sidebar() {
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/upload', label: 'Upload', icon: Upload },
-    { path: '/graph', label: 'Graph Editor', icon: GitBranch },
-    { path: '/study-content', label: 'Study Content', icon: Headphones },
     { path: '/reports', label: 'Reports', icon: FileText },
     { path: '/suggestions', label: 'AI Suggestions', icon: Sparkles },
-    { path: '/canvas', label: 'Canvas', icon: MessageSquare, href: '/canvas?role=instructor' },
   ];
 
   const isActive = (path: string) => (path === '/canvas' ? pathname.startsWith('/canvas') : pathname === path);
@@ -91,7 +88,7 @@ export function Sidebar() {
             return (
               <Link
                 key={item.path}
-                href={item.href ?? item.path}
+                href={item.path}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                   active
                     ? 'bg-sidebar-accent text-primary shadow-sm border border-accent/20'

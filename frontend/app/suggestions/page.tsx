@@ -1,60 +1,27 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { InstructorLayout } from '@/components/InstructorLayout';
-import { Check, X, ChevronDown, Sparkles, Loader2, Clock, Cpu, Hash, FileText } from 'lucide-react';
+import { Check, X, ChevronDown, Sparkles, Clock, Cpu, Hash, FileText } from 'lucide-react';
 import { DotPattern } from '@/components/svg/DotPattern';
-import { PageLoader } from '@/components/LoadingSkeleton';
-import { ErrorState } from '@/components/ErrorBoundary';
 import type { AISuggestion } from '@/lib/types';
-import * as api from '@/lib/api';
-import { useExam } from '@/lib/exam-context';
+import { MOCK_SUGGESTIONS } from '@/lib/mock-data';
 
 export default function AISuggestions() {
-  const { selectedExamId, loading: examLoading } = useExam();
-  const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<AISuggestion[]>(MOCK_SUGGESTIONS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [processingId, setProcessingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
 
-  useEffect(() => {
-    if (!selectedExamId) return;
-    loadSuggestions();
-  }, [selectedExamId]);
-
-  const loadSuggestions = async () => {
-    if (!selectedExamId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.getSuggestions(selectedExamId);
-      setSuggestions(data);
-    } catch {
-      setError('Failed to load suggestions');
-    } finally {
-      setLoading(false);
-    }
+  const handleReview = (id: string, action: 'accept' | 'reject') => {
+    setSuggestions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, status: action === 'accept' ? 'accepted' as const : 'rejected' as const } : s))
+    );
   };
 
-  const handleReview = async (id: string, action: 'accept' | 'reject') => {
-    if (!selectedExamId) return;
-    setProcessingId(id);
-    try {
-      const updated = await api.reviewSuggestion(selectedExamId, id, action);
-      setSuggestions((prev) => prev.map((s) => (s.id === id ? updated : s)));
-    } catch {
-      // handled
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleBulkAction = async (action: 'accept' | 'reject') => {
+  const handleBulkAction = (action: 'accept' | 'reject') => {
     const pending = suggestions.filter((s) => s.status === 'pending');
     for (const s of pending) {
-      await handleReview(s.id, action);
+      handleReview(s.id, action);
     }
   };
 
@@ -78,17 +45,6 @@ export default function AISuggestions() {
 
   const filteredSuggestions = filter === 'all' ? suggestions : suggestions.filter((s) => s.status === filter);
   const pendingCount = suggestions.filter((s) => s.status === 'pending').length;
-
-  if (examLoading || !selectedExamId) {
-    return (
-      <InstructorLayout>
-        <PageLoader message={!selectedExamId ? 'Select an exam from the dashboard or upload wizard.' : 'Loading…'} />
-      </InstructorLayout>
-    );
-  }
-
-  if (loading) return <InstructorLayout><PageLoader message="Loading AI suggestions..." /></InstructorLayout>;
-  if (error) return <InstructorLayout><ErrorState message={error} onRetry={loadSuggestions} /></InstructorLayout>;
 
   return (
     <InstructorLayout>
@@ -179,18 +135,12 @@ export default function AISuggestions() {
                       <td className="py-3 px-4">
                         {suggestion.status === 'pending' && (
                           <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                            {processingId === suggestion.id ? (
-                              <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
-                            ) : (
-                              <>
                                 <button onClick={() => handleReview(suggestion.id, 'accept')} className="p-1.5 hover:bg-chart-4/10 rounded-lg transition-colors" title="Accept">
                                   <Check className="w-4 h-4 text-chart-4" />
                                 </button>
                                 <button onClick={() => handleReview(suggestion.id, 'reject')} className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors" title="Reject">
                                   <X className="w-4 h-4 text-destructive" />
                                 </button>
-                              </>
-                            )}
                           </div>
                         )}
                       </td>

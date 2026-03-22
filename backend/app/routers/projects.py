@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import Exam, Project, StudyContent
 from app.rate_limit import enforce_instructor_write_limit
@@ -49,7 +48,6 @@ async def create_project(
     body: ProjectCreate,
     db: AsyncSession = Depends(get_db),
     _rl: None = Depends(enforce_instructor_write_limit),
-    _user: str = Depends(get_current_instructor),
 ):
     exam_result = await db.execute(select(Exam).where(Exam.id == body.exam_id))
     if not exam_result.scalar_one_or_none():
@@ -66,14 +64,13 @@ async def create_project(
 async def list_projects(
     exam_id: UUID = Query(...),
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
     if not exam_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Exam not found")
 
     result = await db.execute(
-        select(Project).where(Project.exam_id == exam_id).order_by(Project.created_at.desc())
+        select(Project).where(Project.exam_id == exam_id).order_by(Project.created_at.desc()),
     )
     return result.scalars().all()
 
@@ -82,7 +79,6 @@ async def list_projects(
 async def get_project(
     project_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -97,7 +93,6 @@ async def create_project_study_content(
     body: StudyContentCreateRequest,
     db: AsyncSession = Depends(get_db),
     _rl: None = Depends(enforce_instructor_write_limit),
-    _user: str = Depends(get_current_instructor),
 ):
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -126,7 +121,6 @@ async def create_project_study_content(
 async def list_project_study_content(
     project_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -136,6 +130,6 @@ async def list_project_study_content(
     rows = await db.execute(
         select(StudyContent)
         .where(StudyContent.project_id == project.id)
-        .order_by(StudyContent.created_at.desc())
+        .order_by(StudyContent.created_at.desc()),
     )
     return StudyContentListResponse(items=[_to_study_response(row) for row in rows.scalars().all()])

@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import Cluster, ClusterAssignment, Exam
 from app.schemas.schemas import (
@@ -22,7 +21,6 @@ router = APIRouter(prefix="/api/v1/exams", tags=["Clusters"])
 async def get_clusters(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Get misconception clusters and student assignments."""
     # Verify exam
@@ -32,7 +30,7 @@ async def get_clusters(
 
     # Load clusters
     cl_result = await db.execute(
-        select(Cluster).where(Cluster.exam_id == exam_id)
+        select(Cluster).where(Cluster.exam_id == exam_id),
     )
     clusters = cl_result.scalars().all()
 
@@ -58,14 +56,14 @@ async def get_clusters(
             suggested_interventions=[
                 f"Review session for '{c}' — targeted practice and office hours."
                 for c in top_weak
-            ],
+            ]
         ))
 
     # Load assignments
     assign_result = await db.execute(
         select(ClusterAssignment, Cluster)
         .join(Cluster, ClusterAssignment.cluster_id == Cluster.id)
-        .where(ClusterAssignment.exam_id == exam_id)
+        .where(ClusterAssignment.exam_id == exam_id),
     )
     assignments = [
         ClusterAssignmentSummary(

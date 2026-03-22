@@ -1,40 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { StudentLayout } from '@/components/StudentLayout';
 import { DotPattern } from '@/components/svg/DotPattern';
 import { BarChart3, AlertTriangle, BookOpen, TrendingUp, Headphones, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
-import { PageLoader } from '@/components/LoadingSkeleton';
-import { ErrorState } from '@/components/ErrorBoundary';
-import * as api from '@/lib/api';
-import type { ConceptReadiness } from '@/lib/types';
 import { readinessColorFromScore } from '@/lib/theme-colors';
+import { MOCK_STUDENT_CONCEPTS } from '@/lib/mock-data';
 
 export default function StudentDashboard() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [concepts, setConcepts] = useState<ConceptReadiness[]>([]);
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.getStudentReadiness('', '');
-      setConcepts(data.concepts);
-    } catch {
-      setError('Failed to load readiness data. Open your access link again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) return <StudentLayout><PageLoader message="Loading your readiness data..." /></StudentLayout>;
-  if (error) return <StudentLayout><ErrorState message={error} onRetry={loadData} /></StudentLayout>;
+  const concepts = MOCK_STUDENT_CONCEPTS;
 
   const overallReadiness =
     concepts.length > 0 ? concepts.reduce((sum, c) => sum + c.readiness, 0) / concepts.length : 0;

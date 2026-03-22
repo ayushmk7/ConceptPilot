@@ -4,14 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import type { Node, Edge } from '@xyflow/react';
 import { MarkerType } from '@xyflow/react';
-import { InstructorLayout } from '@/components/InstructorLayout';
+import { StudentLayout } from '@/components/StudentLayout';
 import { DotPattern } from '@/components/svg/DotPattern';
-import { Plus, Trash2, Loader2, Sparkles, AlertTriangle, Save, Undo2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertTriangle, Save } from 'lucide-react';
 import * as api from '@/lib/api';
 import { ErrorState } from '@/components/ErrorBoundary';
 import { Skeleton } from '@/components/LoadingSkeleton';
 import type { ConceptGraphNode, ConceptGraphEdge } from '@/lib/types';
-import { useExam } from '@/lib/exam-context';
 import { readinessColorFromScore, themeColor } from '@/lib/theme-colors';
 
 const ReactFlowCanvas = dynamic(
@@ -47,8 +46,7 @@ const getReadinessColor = (readiness?: number) => {
   return readinessColorFromScore(readiness);
 };
 
-export default function GraphEditorPage() {
-  const { selectedExamId, loading: examLoading } = useExam();
+export default function StudentGraphEditorPage() {
   const [graphNodes, setGraphNodes] = useState<ConceptGraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<ConceptGraphEdge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,17 +59,18 @@ export default function GraphEditorPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [dagError, setDagError] = useState<string | null>(null);
 
+  // For students, use a default exam or query param — adapt as needed
+  const examId = 'default';
+
   useEffect(() => {
-    if (!selectedExamId) return;
     loadGraph();
-  }, [selectedExamId]);
+  }, []);
 
   const loadGraph = async () => {
-    if (!selectedExamId) return;
     setLoading(true);
     setError(null);
     try {
-      const { nodes, edges } = await api.getConceptGraph(selectedExamId);
+      const { nodes, edges } = await api.getConceptGraph(examId);
       setGraphNodes(nodes);
       setGraphEdges(edges);
     } catch {
@@ -81,7 +80,6 @@ export default function GraphEditorPage() {
     }
   };
 
-  // Convert to ReactFlow nodes
   const flowNodes: Node[] = graphNodes.map((n, i) => ({
     id: n.id,
     position: { x: 120 + (i % 4) * 200, y: 60 + Math.floor(i / 4) * 150 },
@@ -111,9 +109,9 @@ export default function GraphEditorPage() {
   }));
 
   const handleAddNode = async () => {
-    if (!newNodeLabel.trim() || !selectedExamId) return;
+    if (!newNodeLabel.trim()) return;
     try {
-      const node = await api.addGraphNode(selectedExamId, newNodeLabel.trim());
+      const node = await api.addGraphNode(examId, newNodeLabel.trim());
       setGraphNodes((prev) => [...prev, node]);
       setNewNodeLabel('');
       setShowAddNode(false);
@@ -124,8 +122,8 @@ export default function GraphEditorPage() {
   };
 
   const handleDeleteNode = async () => {
-    if (!selectedNodeId || !selectedExamId) return;
-    await api.removeGraphNode(selectedExamId, selectedNodeId);
+    if (!selectedNodeId) return;
+    await api.removeGraphNode(examId, selectedNodeId);
     setGraphNodes((prev) => prev.filter((n) => n.id !== selectedNodeId));
     setGraphEdges((prev) => prev.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId));
     setSelectedNodeId(null);
@@ -135,14 +133,12 @@ export default function GraphEditorPage() {
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     if (connectingFrom) {
       if (connectingFrom !== node.id) {
-        // Check for DAG cycle (simple check)
         const wouldCycle = graphEdges.some((e) => e.source === node.id && e.target === connectingFrom);
         if (wouldCycle) {
-          setDagError(`Adding edge ${connectingFrom} → ${node.id} would create a cycle`);
+          setDagError(`Adding edge ${connectingFrom} \u2192 ${node.id} would create a cycle`);
           setTimeout(() => setDagError(null), 3000);
         } else {
-          if (!selectedExamId) return;
-          void api.addGraphEdge(selectedExamId, connectingFrom, node.id).then((e) => {
+          void api.addGraphEdge(examId, connectingFrom, node.id).then((e) => {
             setGraphEdges((prev) => [...prev, e]);
             setHasChanges(true);
           });
@@ -152,13 +148,13 @@ export default function GraphEditorPage() {
     } else {
       setSelectedNodeId(node.id === selectedNodeId ? null : node.id);
     }
-  }, [connectingFrom, selectedNodeId, graphEdges, selectedExamId]);
+  }, [connectingFrom, selectedNodeId, graphEdges, examId]);
 
   const handleDeleteEdge = async (edgeId: string) => {
     const edge = graphEdges.find((e) => e.id === edgeId);
-    if (!edge || !selectedExamId) return;
+    if (!edge) return;
     try {
-      await api.removeGraphEdge(selectedExamId, edgeId, edge.source, edge.target);
+      await api.removeGraphEdge(examId, edgeId, edge.source, edge.target);
       setGraphEdges((prev) => prev.filter((e) => e.id !== edgeId));
       setHasChanges(true);
     } catch {
@@ -167,7 +163,6 @@ export default function GraphEditorPage() {
   };
 
   const handleSave = async () => {
-    if (!selectedExamId) return;
     setSaving(true);
     try {
       await loadGraph();
@@ -177,12 +172,10 @@ export default function GraphEditorPage() {
     }
   };
 
-  if (error) return <InstructorLayout><ErrorState message={error} onRetry={loadGraph} /></InstructorLayout>;
-
-  const isReady = !examLoading && selectedExamId && !loading;
+  if (error) return <StudentLayout><ErrorState message={error} onRetry={loadGraph} /></StudentLayout>;
 
   return (
-    <InstructorLayout>
+    <StudentLayout>
       <div className="relative h-[calc(100vh-56px)] flex flex-col">
         <DotPattern className="text-muted-foreground" />
 
@@ -265,13 +258,11 @@ export default function GraphEditorPage() {
 
         {/* Graph canvas */}
         <div className="flex-1">
-          {!isReady ? (
+          {loading ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
                 <Loader2 className="w-7 h-7 text-primary animate-spin mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  {!selectedExamId ? 'Select a course and exam from the sidebar.' : 'Loading concept graph...'}
-                </p>
+                <p className="text-sm text-muted-foreground">Loading concept graph...</p>
               </div>
             </div>
           ) : (
@@ -323,6 +314,6 @@ export default function GraphEditorPage() {
           </div>
         </div>
       </div>
-    </InstructorLayout>
+    </StudentLayout>
   );
 }

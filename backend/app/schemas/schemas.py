@@ -410,7 +410,6 @@ class StudentTokenItem(BaseModel):
     student_id: str
     token: str
     created_at: datetime
-    expires_at: datetime
 
     model_config = {"from_attributes": True}
 

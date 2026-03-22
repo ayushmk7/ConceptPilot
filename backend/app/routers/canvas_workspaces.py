@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import CanvasWorkspace
 from app.rate_limit import enforce_instructor_write_limit
@@ -31,7 +30,6 @@ def _to_response(row: CanvasWorkspace) -> CanvasWorkspaceResponse:
 @router.get("", response_model=list[CanvasWorkspaceResponse])
 async def list_canvas_workspaces(
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     result = await db.execute(select(CanvasWorkspace).order_by(CanvasWorkspace.updated_at.desc()))
     return [_to_response(r) for r in result.scalars().all()]
@@ -42,7 +40,6 @@ async def create_canvas_workspace(
     body: CanvasWorkspaceCreate,
     db: AsyncSession = Depends(get_db),
     _rl: None = Depends(enforce_instructor_write_limit),
-    _user: str = Depends(get_current_instructor),
 ):
     now = datetime.utcnow()
     row = CanvasWorkspace(
@@ -61,7 +58,6 @@ async def create_canvas_workspace(
 async def get_canvas_workspace(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     result = await db.execute(select(CanvasWorkspace).where(CanvasWorkspace.id == workspace_id))
     row = result.scalar_one_or_none()
@@ -76,7 +72,6 @@ async def update_canvas_workspace(
     body: CanvasWorkspaceUpdate,
     db: AsyncSession = Depends(get_db),
     _rl: None = Depends(enforce_instructor_write_limit),
-    _user: str = Depends(get_current_instructor),
 ):
     result = await db.execute(select(CanvasWorkspace).where(CanvasWorkspace.id == workspace_id))
     row = result.scalar_one_or_none()
@@ -97,7 +92,6 @@ async def delete_canvas_workspace(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_db),
     _rl: None = Depends(enforce_instructor_write_limit),
-    _user: str = Depends(get_current_instructor),
 ):
     result = await db.execute(select(CanvasWorkspace).where(CanvasWorkspace.id == workspace_id))
     row = result.scalar_one_or_none()

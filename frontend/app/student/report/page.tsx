@@ -1,16 +1,37 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ReactFlow, Background } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+import dynamic from 'next/dynamic';
 import { StudentLayout } from '@/components/StudentLayout';
 import { DotPattern } from '@/components/svg/DotPattern';
+import { Skeleton } from '@/components/LoadingSkeleton';
 import Link from 'next/link';
-import { PageLoader } from '@/components/LoadingSkeleton';
-import { ErrorState } from '@/components/ErrorBoundary';
-import * as api from '@/lib/api';
-import type { ConceptReadiness, ConceptGraphNode, ConceptGraphEdge } from '@/lib/types';
 import { readinessColorFromScore, readinessColorsJs, themeColor } from '@/lib/theme-colors';
+import { MOCK_STUDENT_CONCEPTS, MOCK_GRAPH_NODES, MOCK_GRAPH_EDGES } from '@/lib/mock-data';
+
+const ReactFlowGraph = dynamic(
+  () => import('@xyflow/react').then((m) => {
+    require('@xyflow/react/dist/style.css');
+    return {
+      default: ({ nodes, edges, edgeOptions, bgColor }: {
+        nodes: any[]; edges: any[];
+        edgeOptions: any; bgColor: string;
+      }) => (
+        <m.ReactFlow
+          nodes={nodes}
+          edges={edges}
+          fitView
+          defaultEdgeOptions={edgeOptions}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+        >
+          <m.Background gap={20} size={1} color={bgColor} />
+        </m.ReactFlow>
+      ),
+    };
+  }),
+  { ssr: false, loading: () => <Skeleton className="h-80 w-full" /> },
+);
 
 const heatLegend = readinessColorsJs.map((color, i) => ({
   color,
@@ -18,39 +39,9 @@ const heatLegend = readinessColorsJs.map((color, i) => ({
 }));
 
 export default function StudentReport() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [concepts, setConcepts] = useState<ConceptReadiness[]>([]);
-  const [graphNodes, setGraphNodes] = useState<ConceptGraphNode[]>([]);
-  const [graphEdges, setGraphEdges] = useState<ConceptGraphEdge[]>([]);
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      let r = api.getStudentReportFromCache();
-      if (!r) {
-        await api.getStudentReadiness('', '');
-        r = api.getStudentReportFromCache();
-      }
-      if (!r) throw new Error('no report');
-      setConcepts(api.studentReportToConcepts(r));
-      const g = api.studentReportToGraph(r);
-      setGraphNodes(g.nodes);
-      setGraphEdges(g.edges);
-    } catch {
-      setError('Failed to load report data. Use your instructor access link.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) return <StudentLayout><PageLoader message="Loading your readiness report..." /></StudentLayout>;
-  if (error) return <StudentLayout><ErrorState message={error} onRetry={loadData} /></StudentLayout>;
+  const concepts = MOCK_STUDENT_CONCEPTS;
+  const graphNodes = MOCK_GRAPH_NODES;
+  const graphEdges = MOCK_GRAPH_EDGES;
 
   const positions = [
     { x: 200, y: 20 }, { x: 400, y: 20 }, { x: 100, y: 130 },
@@ -100,17 +91,12 @@ export default function StudentReport() {
           <div className="card-elevated p-6 mb-6 animate-fade-in-up delay-100">
             <h2 className="text-lg font-semibold text-primary mb-4">Concept Map</h2>
             <div className="h-80 bg-muted/50 rounded-xl border border-border">
-              <ReactFlow
+              <ReactFlowGraph
                 nodes={flowNodes}
                 edges={flowEdges}
-                fitView
-                defaultEdgeOptions={{ type: 'smoothstep', style: { stroke: themeColor.input, strokeWidth: 2 } }}
-                nodesDraggable={false}
-                nodesConnectable={false}
-                elementsSelectable={false}
-              >
-                <Background gap={20} size={1} color={themeColor.border} />
-              </ReactFlow>
+                edgeOptions={{ type: 'smoothstep', style: { stroke: themeColor.input, strokeWidth: 2 } }}
+                bgColor={themeColor.border}
+              />
             </div>
             <div className="flex items-center gap-4 mt-4 text-xs">
               {heatLegend.map((item) => (

@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import (
     ClassAggregate,
@@ -37,7 +36,7 @@ READINESS_BUCKETS = [
     ("20-40", 0.2, 0.4),
     ("40-60", 0.4, 0.6),
     ("60-80", 0.6, 0.8),
-    ("80-100", 0.8, 1.01),  # 1.01 to include 1.0
+    ("80-100", 0.8, 1.01),  # 1.01 to include 1.0,
 ]
 
 
@@ -50,7 +49,6 @@ async def get_dashboard(
     exam_id: UUID,
     concept_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Instructor dashboard: heatmap, foundational gap alerts, aggregates.
 
@@ -76,7 +74,7 @@ async def get_dashboard(
         select(ConceptGraph)
         .where(ConceptGraph.exam_id == exam_id)
         .order_by(ConceptGraph.version.desc())
-        .limit(1)
+        .limit(1),
     )
     graph_row = g_result.scalar_one_or_none()
     label_map = {}
@@ -98,7 +96,7 @@ async def get_dashboard(
 
     # --- Build alerts ---
     params_result = await db.execute(
-        select(Parameter).where(Parameter.exam_id == exam_id)
+        select(Parameter).where(Parameter.exam_id == exam_id),
     )
     params = params_result.scalar_one_or_none()
     alert_threshold = params.threshold if params else 0.6
@@ -129,7 +127,6 @@ async def get_dashboard(
 async def get_alerts(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Foundational gap alerts only (subset of the full dashboard)."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -137,7 +134,7 @@ async def get_alerts(
         raise HTTPException(status_code=404, detail="Exam not found")
 
     agg_result = await db.execute(
-        select(ClassAggregate).where(ClassAggregate.exam_id == exam_id)
+        select(ClassAggregate).where(ClassAggregate.exam_id == exam_id),
     )
     aggregates = agg_result.scalars().all()
     if not aggregates:
@@ -147,7 +144,7 @@ async def get_alerts(
         select(ConceptGraph)
         .where(ConceptGraph.exam_id == exam_id)
         .order_by(ConceptGraph.version.desc())
-        .limit(1)
+        .limit(1),
     )
     graph_row = g_result.scalar_one_or_none()
     label_map: dict[str, str] = {}
@@ -158,7 +155,7 @@ async def get_alerts(
             label_map[n["id"]] = n.get("label", n["id"])
 
     params_result = await db.execute(
-        select(Parameter).where(Parameter.exam_id == exam_id)
+        select(Parameter).where(Parameter.exam_id == exam_id),
     )
     params = params_result.scalar_one_or_none()
     threshold = params.threshold if params else 0.6
@@ -226,10 +223,10 @@ def _build_alerts(
             downstream_concepts=[label_map.get(d, d) for d in downstream],
             impact=round(impact, 2),
             recommended_action=(
-                f"Review session recommended for '{label_map.get(a.concept_id, a.concept_id)}'. "
-                f"{a.below_threshold_count} students are struggling, affecting "
-                f"{len(downstream)} downstream concept(s)."
-            ),
+                f"Review session recommended for '{label_map.get(a.concept_id, a.concept_id)}'. ",
+                f"{a.below_threshold_count} students are struggling, affecting ",
+                f"{len(downstream)} downstream concept(s).",
+            )
         ))
 
     # Sort by impact descending
@@ -249,11 +246,10 @@ async def get_trace(
     exam_id: UUID,
     concept_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Root-cause trace for a specific concept.
 
-    Shows direct performance, contributing prerequisites, downstream boosts,
+    Shows direct performance, contributing prerequisites, downstream boosts
     and a waterfall visualization of how readiness was computed.
     """
     # Verify exam
@@ -266,7 +262,7 @@ async def get_trace(
         select(ConceptGraph)
         .where(ConceptGraph.exam_id == exam_id)
         .order_by(ConceptGraph.version.desc())
-        .limit(1)
+        .limit(1),
     )
     graph_row = g_result.scalar_one_or_none()
     label_map = {}
@@ -290,7 +286,7 @@ async def get_trace(
 
     # Load parameters
     params_result = await db.execute(
-        select(Parameter).where(Parameter.exam_id == exam_id)
+        select(Parameter).where(Parameter.exam_id == exam_id),
     )
     params = params_result.scalar_one_or_none()
     alpha = params.alpha if params else 1.0
@@ -383,7 +379,7 @@ async def get_trace(
             label="Final Readiness",
             value=avg_final,
             cumulative=avg_final,
-        ),
+        )
     ]
 
     return TraceResponse(

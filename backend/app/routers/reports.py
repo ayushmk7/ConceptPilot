@@ -1,15 +1,12 @@
-"""Student report endpoint: API-09 — token-based access, no auth required."""
+"""Student report endpoints: token-based permalink access and direct access."""
 
 import uuid as _uuid_mod
-from datetime import timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
-from app.config import settings
 from app.database import get_db
 from app.models.models import ConceptGraph, Exam, ReadinessResult, StudentToken
 from app.schemas.schemas import (
@@ -19,7 +16,7 @@ from app.schemas.schemas import (
     StudentTokenItem,
     StudentTokenListResponse,
 )
-from app.services.report_service import build_student_report, is_token_expired
+from app.services.report_service import build_student_report
 
 router = APIRouter(tags=["Reports"])
 
@@ -29,9 +26,8 @@ router = APIRouter(tags=["Reports"])
 async def list_report_tokens(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
-    """List all student report tokens for an exam (instructor only).
+    """List all student report tokens for an exam.
 
     Auto-creates tokens for any students found in ReadinessResult that
     don't already have one, ensuring the student list is always complete
@@ -70,13 +66,11 @@ async def list_report_tokens(
     if created_new:
         await db.flush()
 
-    expiry_days = settings.STUDENT_TOKEN_EXPIRY_DAYS
     items = [
         StudentTokenItem(
             student_id=t.student_id_external,
             token=str(t.token),
             created_at=t.created_at,
-            expires_at=t.created_at + timedelta(days=expiry_days),
         )
         for t in existing_tokens.values()
     ]
@@ -89,7 +83,7 @@ async def get_student_report(
     token: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Get a student report using a unique token. No authentication required.
+    """Get a student report using a unique token (permalink).
 
     The report includes:
       - Personal concept graph with readiness coloring
@@ -105,11 +99,7 @@ async def get_student_report(
     token_row = t_result.scalar_one_or_none()
 
     if not token_row:
-        raise HTTPException(status_code=404, detail="Invalid or expired report token")
-
-    # Check expiry
-    if is_token_expired(token_row.created_at):
-        raise HTTPException(status_code=410, detail="Report token has expired")
+        raise HTTPException(status_code=404, detail="Invalid report token")
 
     exam_id = token_row.exam_id
     student_id = token_row.student_id_external
@@ -159,20 +149,15 @@ async def get_student_report(
 
 
 # ---------------------------------------------------------------------------
-# Direct instructor endpoints (no tokens required)
+# Direct access endpoints
 # ---------------------------------------------------------------------------
 
 @router.get("/api/v1/exams/{exam_id}/students", response_model=StudentListResponse)
 async def list_students(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
-    """List all student IDs that have readiness results for this exam.
-
-    This is the authoritative source for 'which students have been computed'.
-    Does not require tokens — intended for instructor use only.
-    """
+    """List all student IDs that have readiness results for this exam."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Exam not found")
@@ -194,9 +179,8 @@ async def get_student_report_direct(
     exam_id: UUID,
     student_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
-    """Get the full report for a specific student by ID (instructor access, no token needed)."""
+    """Get the full report for a specific student by ID."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Exam not found")

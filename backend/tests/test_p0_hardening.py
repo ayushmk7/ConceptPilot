@@ -76,11 +76,6 @@ class TestProductionConfigGuards:
                 "CORS_ALLOWED_ORIGINS must be set to explicit origin(s) in production "
                 "(got '*' or empty).  Example: https://app.conceptpilot.com"
             )
-        if settings_obj.INSTRUCTOR_USERNAME == "admin" and settings_obj.INSTRUCTOR_PASSWORD == "admin":
-            raise RuntimeError(
-                "Default instructor credentials (admin/admin) cannot be used in production. "
-                "Set INSTRUCTOR_USERNAME and INSTRUCTOR_PASSWORD to strong values."
-            )
         if settings_obj.COMPUTE_ASYNC_ENABLED:
             if settings_obj.COMPUTE_QUEUE_BACKEND != "redis":
                 raise RuntimeError(
@@ -101,24 +96,8 @@ class TestProductionConfigGuards:
             DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
             APP_ENV="production",
             CORS_ALLOWED_ORIGINS="*",
-            INSTRUCTOR_USERNAME="secure_user",
-            INSTRUCTOR_PASSWORD="secure_pass",
         )
         with pytest.raises(RuntimeError, match="CORS_ALLOWED_ORIGINS"):
-            self._validate(s)
-
-    def test_default_credentials_rejected(self):
-        from app.config import Settings
-
-        s = Settings(
-            _env_file=None,
-            DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
-            APP_ENV="production",
-            CORS_ALLOWED_ORIGINS="https://app.example.com",
-            INSTRUCTOR_USERNAME="admin",
-            INSTRUCTOR_PASSWORD="admin",
-        )
-        with pytest.raises(RuntimeError, match="Default instructor credentials"):
             self._validate(s)
 
     def test_valid_production_config_passes(self):
@@ -129,8 +108,6 @@ class TestProductionConfigGuards:
             DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
             APP_ENV="production",
             CORS_ALLOWED_ORIGINS="https://app.example.com",
-            INSTRUCTOR_USERNAME="real_admin",
-            INSTRUCTOR_PASSWORD="s3cure!Pa$$",
         )
         self._validate(s)  # should not raise
 
@@ -142,8 +119,6 @@ class TestProductionConfigGuards:
             DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
             APP_ENV="production",
             CORS_ALLOWED_ORIGINS="https://app.example.com",
-            INSTRUCTOR_USERNAME="real_admin",
-            INSTRUCTOR_PASSWORD="s3cure!Pa$$",
             COMPUTE_ASYNC_ENABLED=True,
             COMPUTE_QUEUE_BACKEND="file",
             COMPUTE_QUEUE_REDIS_URL="redis://localhost:6379/0",
@@ -159,8 +134,6 @@ class TestProductionConfigGuards:
             DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
             APP_ENV="production",
             CORS_ALLOWED_ORIGINS="https://app.example.com",
-            INSTRUCTOR_USERNAME="real_admin",
-            INSTRUCTOR_PASSWORD="s3cure!Pa$$",
             COMPUTE_ASYNC_ENABLED=True,
             COMPUTE_QUEUE_BACKEND="redis",
             COMPUTE_QUEUE_REDIS_URL="",
@@ -176,8 +149,6 @@ class TestProductionConfigGuards:
             DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
             APP_ENV="production",
             CORS_ALLOWED_ORIGINS="https://app.example.com",
-            INSTRUCTOR_USERNAME="real_admin",
-            INSTRUCTOR_PASSWORD="s3cure!Pa$$",
             COMPUTE_ASYNC_ENABLED=True,
             COMPUTE_QUEUE_BACKEND="redis",
             COMPUTE_QUEUE_REDIS_URL="redis://localhost:6379/0",

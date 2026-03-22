@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.config import settings
 from app.database import get_db
 from app.models.models import ComputeRun, Exam, InterventionResult, Parameter
@@ -25,7 +24,6 @@ async def compute_readiness(
     body: ComputeRequest = ComputeRequest(),
     db: AsyncSession = Depends(get_db),
     _rl: None = Depends(enforce_instructor_write_limit),
-    _user: str = Depends(get_current_instructor),
 ):
     """Run compute in sync mode or enqueue in async mode."""
     run_id = uuid.uuid4()
@@ -36,7 +34,7 @@ async def compute_readiness(
 
     # Load parameters (request body overrides stored defaults)
     p_result = await db.execute(
-        select(Parameter).where(Parameter.exam_id == exam_id)
+        select(Parameter).where(Parameter.exam_id == exam_id),
     )
     params = p_result.scalar_one_or_none()
     alpha = body.alpha if body.alpha != 1.0 else (params.alpha if params else 1.0)
@@ -53,7 +51,7 @@ async def compute_readiness(
         parameters_json={
             "alpha": alpha, "beta": beta, "gamma": gamma,
             "threshold": threshold, "k": k,
-        },
+        }
     )
     db.add(compute_run)
     await db.flush()
@@ -71,7 +69,7 @@ async def compute_readiness(
         if not queued:
             compute_run.status = "failed"
             compute_run.error_message = (
-                f"Unsupported queue backend: {settings.COMPUTE_QUEUE_BACKEND}"
+                f"Unsupported queue backend: {settings.COMPUTE_QUEUE_BACKEND}",
             )
             await db.flush()
             raise HTTPException(status_code=500, detail="Failed to enqueue compute job")
@@ -101,13 +99,12 @@ async def compute_readiness(
 async def list_compute_runs(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """List all compute runs for an exam, most recent first."""
     result = await db.execute(
         select(ComputeRun)
         .where(ComputeRun.exam_id == exam_id)
-        .order_by(ComputeRun.created_at.desc())
+        .order_by(ComputeRun.created_at.desc()),
     )
     runs = result.scalars().all()
     return [
@@ -134,7 +131,6 @@ async def get_compute_run(
     exam_id: UUID,
     run_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Get a single compute run by its run_id."""
     result = await db.execute(
@@ -167,13 +163,12 @@ async def get_compute_run(
 async def get_interventions(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Get ranked intervention recommendations from the latest compute run."""
     result = await db.execute(
         select(InterventionResult)
         .where(InterventionResult.exam_id == exam_id)
-        .order_by(InterventionResult.impact.desc())
+        .order_by(InterventionResult.impact.desc()),
     )
     interventions = result.scalars().all()
     return {

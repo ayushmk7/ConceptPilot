@@ -1,12 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
   addEdge,
   useNodesState,
   useEdgesState,
@@ -14,7 +11,34 @@ import {
   type Edge,
   type Node,
 } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+
+const ReactFlowWithExtras = dynamic(
+  () => import('@xyflow/react').then((m) => {
+    require('@xyflow/react/dist/style.css');
+    return {
+      default: (props: any) => (
+        <m.ReactFlow {...props}>
+          {props.children}
+          <m.Background
+            gap={20} size={1}
+            color={props._bgColor}
+            style={{ backgroundColor: props._bgStyle }}
+          />
+          <m.Controls
+            className="bg-white rounded-lg shadow-lg border border-border"
+            showInteractive={false}
+          />
+          <m.MiniMap
+            className="bg-white rounded-lg shadow-lg border border-border"
+            nodeColor={props._miniMapNodeColor}
+            maskColor="rgba(0, 0, 0, 0.1)"
+          />
+        </m.ReactFlow>
+      ),
+    };
+  }),
+  { ssr: false },
+);
 import { ArrowLeft } from 'lucide-react';
 
 import { ChatNode, type OnBranchCreate } from '@/components/canvas/ChatNode';
@@ -50,6 +74,8 @@ const RESOURCE_TYPES = new Set(['document', 'image', 'artifact']);
 export default function CanvasPage() {
   const params = useParams<{ projectId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const roleSuffix = searchParams.get('role') === 'student' ? '?role=student' : '';
   const projectId = params.projectId;
 
   const [nodes, setNodes, onNodesChange] = useNodesState(DEFAULT_CANVAS_NODES);
@@ -340,7 +366,7 @@ export default function CanvasPage() {
     <div className="h-full w-full bg-background relative">
       {/* Back button */}
       <button
-        onClick={() => router.push('/canvas')}
+        onClick={() => router.push(`/canvas${roleSuffix}`)}
         className="absolute top-4 left-4 z-10 p-2 bg-white rounded-lg shadow-md border border-border hover:bg-muted transition-colors"
       >
         <ArrowLeft className="w-4 h-4 text-primary" />
@@ -372,7 +398,7 @@ export default function CanvasPage() {
           {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
 
           {/* React Flow canvas */}
-          <ReactFlow
+          <ReactFlowWithExtras
             className={entranceClass}
             nodes={nodes}
             edges={edges}
@@ -389,23 +415,10 @@ export default function CanvasPage() {
               animated: true,
               style: { stroke: themeColor.input, strokeWidth: 2 },
             }}
-          >
-            <Background
-              gap={20}
-              size={1}
-              color={themeColor.border}
-              style={{ backgroundColor: themeColor.background }}
-            />
-            <Controls
-              className="bg-white rounded-lg shadow-lg border border-border"
-              showInteractive={false}
-            />
-            <MiniMap
-              className="bg-white rounded-lg shadow-lg border border-border"
-              nodeColor={themeColor.primary}
-              maskColor="rgba(0, 0, 0, 0.1)"
-            />
-          </ReactFlow>
+            _bgColor={themeColor.border}
+            _bgStyle={themeColor.background}
+            _miniMapNodeColor={themeColor.primary}
+          />
         </>
       )}
     </div>

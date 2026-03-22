@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Layout, Clock, Trash2, Loader2 } from 'lucide-react';
 import {
   listCanvasWorkspaces,
@@ -12,6 +12,8 @@ import {
 
 export default function CanvasProjectsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const roleSuffix = searchParams.get('role') === 'student' ? '?role=student' : '';
   const [projects, setProjects] = useState<CanvasWorkspaceApi[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export default function CanvasProjectsPage() {
     setError(null);
     try {
       const row = await createCanvasWorkspace();
-      router.push(`/canvas/${row.id}`);
+      router.push(`/canvas/${row.id}${roleSuffix}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create workspace');
     }
@@ -107,10 +109,10 @@ export default function CanvasProjectsPage() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    router.push(`/canvas/${project.id}`);
+                    router.push(`/canvas/${project.id}${roleSuffix}`);
                   }
                 }}
-                onClick={() => router.push(`/canvas/${project.id}`)}
+                onClick={() => router.push(`/canvas/${project.id}${roleSuffix}`)}
                 className="group bg-card border border-border rounded-xl p-5 cursor-pointer hover:border-primary hover:shadow-md transition-all text-left"
               >
                 <div className="h-28 bg-muted rounded-lg mb-4 flex items-center justify-center">

@@ -1,8 +1,14 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { StudentTopNav } from './StudentTopNav';
 import { StudentSidebar } from './StudentSidebar';
 import { ErrorBoundary } from './ErrorBoundary';
+
+const ChatAssistant = dynamic(
+  () => import('./ChatAssistant').then((m) => ({ default: m.ChatAssistant })),
+  { ssr: false },
+);
 
 export function StudentLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -16,6 +22,7 @@ export function StudentLayout({ children }: { children: React.ReactNode }) {
           </ErrorBoundary>
         </main>
       </div>
+      <ChatAssistant />
     </div>
   );
 }

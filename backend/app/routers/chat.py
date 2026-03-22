@@ -14,7 +14,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth import get_current_instructor
 from app.config import settings
 from app.database import get_db
 from app.models.models import ChatMessage, ChatSession, Exam
@@ -36,7 +35,6 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 async def create_session(
     body: ChatSessionCreate,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Create a new chat session, optionally scoped to an exam."""
     if body.exam_id:
@@ -59,7 +57,6 @@ async def create_session(
 async def list_sessions(
     exam_id: Optional[UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """List all chat sessions, optionally filtered by exam."""
     q = select(ChatSession).order_by(ChatSession.updated_at.desc())
@@ -73,7 +70,6 @@ async def list_sessions(
 async def get_session(
     session_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Get a chat session by ID."""
     session = await db.get(ChatSession, session_id)
@@ -86,7 +82,6 @@ async def get_session(
 async def get_messages(
     session_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Get all messages in a chat session."""
     session = await db.get(ChatSession, session_id)
@@ -96,7 +91,7 @@ async def get_messages(
     result = await db.execute(
         select(ChatMessage)
         .where(ChatMessage.session_id == session_id)
-        .order_by(ChatMessage.created_at)
+        .order_by(ChatMessage.created_at),
     )
     messages = result.scalars().all()
     return [
@@ -118,13 +113,12 @@ async def send_message(
     session_id: UUID,
     body: ChatSendRequest,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Send a message to the AI assistant in an existing session."""
     result = await db.execute(
         select(ChatSession)
         .where(ChatSession.id == session_id)
-        .options(selectinload(ChatSession.messages))
+        .options(selectinload(ChatSession.messages)),
     )
     session = result.scalar_one_or_none()
     if not session:
@@ -158,7 +152,6 @@ async def send_message(
 async def quick_chat(
     body: ChatSendRequest,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """One-shot chat: creates a session and sends a message in one call."""
     session = ChatSession(
@@ -172,7 +165,7 @@ async def quick_chat(
     result = await db.execute(
         select(ChatSession)
         .where(ChatSession.id == session.id)
-        .options(selectinload(ChatSession.messages))
+        .options(selectinload(ChatSession.messages)),
     )
     session = result.scalar_one_or_none()
 
@@ -198,7 +191,6 @@ async def quick_chat(
 async def delete_session(
     session_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Delete a chat session and all its messages."""
     session = await db.get(ChatSession, session_id)

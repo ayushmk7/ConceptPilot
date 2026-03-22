@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import AISuggestion, ConceptGraph, ComputeRun, Exam, ReadinessResult
 from app.schemas.schemas import (
@@ -31,7 +30,6 @@ router = APIRouter(prefix="/api/v1/exams", tags=["Graph"])
 async def get_graph(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Return the latest concept graph with readiness overlays."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -42,7 +40,7 @@ async def get_graph(
         select(ConceptGraph)
         .where(ConceptGraph.exam_id == exam_id)
         .order_by(ConceptGraph.version.desc())
-        .limit(1)
+        .limit(1),
     )
     graph_row = g_result.scalar_one_or_none()
     if not graph_row:
@@ -56,7 +54,7 @@ async def get_graph(
         select(ComputeRun)
         .where(ComputeRun.exam_id == exam_id, ComputeRun.status == "success")
         .order_by(ComputeRun.created_at.desc())
-        .limit(1)
+        .limit(1),
     )
     compute_run = run_result.scalar_one_or_none()
 
@@ -64,7 +62,7 @@ async def get_graph(
     csv_concept_ids: set[str] = set()
     if compute_run:
         sr_result = await db.execute(
-            select(ReadinessResult).where(ReadinessResult.run_id == compute_run.run_id)
+            select(ReadinessResult).where(ReadinessResult.run_id == compute_run.run_id),
         )
         for sr in sr_result.scalars().all():
             csv_concept_ids.add(sr.concept_id)
@@ -111,7 +109,6 @@ async def expand_graph(
     exam_id: UUID,
     body: GraphExpandRequest,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Use AI to suggest subtopics and edges extending from a given concept."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -122,7 +119,7 @@ async def expand_graph(
         select(ConceptGraph)
         .where(ConceptGraph.exam_id == exam_id)
         .order_by(ConceptGraph.version.desc())
-        .limit(1)
+        .limit(1),
     )
     graph_row = g_result.scalar_one_or_none()
     existing_ids: set[str] = set()
@@ -180,7 +177,6 @@ async def patch_graph(
     exam_id: UUID,
     body: GraphPatchRequest,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Edit the concept dependency graph: add/remove nodes and edges."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -191,7 +187,7 @@ async def patch_graph(
         select(ConceptGraph)
         .where(ConceptGraph.exam_id == exam_id)
         .order_by(ConceptGraph.version.desc())
-        .limit(1)
+        .limit(1),
     )
     graph_row = g_result.scalar_one_or_none()
 
@@ -202,7 +198,7 @@ async def patch_graph(
         )
 
     updated_json, is_dag, cycle_path, errors = apply_patch(
-        graph_row.graph_json, body
+        graph_row.graph_json, body,
     )
 
     if errors:
@@ -227,7 +223,6 @@ async def patch_graph(
 async def list_graph_versions(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """List all graph versions for an exam, newest first."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -237,7 +232,7 @@ async def list_graph_versions(
     g_result = await db.execute(
         select(ConceptGraph)
         .where(ConceptGraph.exam_id == exam_id)
-        .order_by(ConceptGraph.version.desc())
+        .order_by(ConceptGraph.version.desc()),
     )
     rows = g_result.scalars().all()
 

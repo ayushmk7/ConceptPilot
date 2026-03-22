@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import Course, Exam, Parameter
 from app.schemas.schemas import ExamCreate, ExamResponse
@@ -23,7 +22,6 @@ async def create_exam(
     course_id: UUID,
     body: ExamCreate,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Create a new exam under a course. Also initialises default parameters."""
     # Verify course exists
@@ -53,11 +51,10 @@ async def create_exam(
 async def list_exams(
     course_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """List all exams for a course."""
     result = await db.execute(
-        select(Exam).where(Exam.course_id == course_id).order_by(Exam.created_at.desc())
+        select(Exam).where(Exam.course_id == course_id).order_by(Exam.created_at.desc()),
     )
     return result.scalars().all()
 
@@ -66,7 +63,6 @@ async def list_exams(
 async def get_exam(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Get a single exam by ID."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))

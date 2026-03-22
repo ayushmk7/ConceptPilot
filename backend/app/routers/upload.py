@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import (
     ConceptGraph,
@@ -43,7 +42,6 @@ async def upload_scores(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     _rl: None = Depends(enforce_instructor_write_limit),
-    _user: str = Depends(get_current_instructor),
 ):
     """Upload exam scores CSV. Validates and persists to DB.
 
@@ -110,7 +108,6 @@ async def upload_mapping(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     _rl: None = Depends(enforce_instructor_write_limit),
-    _user: str = Depends(get_current_instructor),
 ):
     """Upload question-to-concept mapping CSV.
 
@@ -124,7 +121,7 @@ async def upload_mapping(
 
     # Get existing question IDs for cross-validation
     q_result = await db.execute(
-        select(Question.question_id_external).where(Question.exam_id == exam_id)
+        select(Question.question_id_external).where(Question.exam_id == exam_id),
     )
     existing_qids = {row[0] for row in q_result.fetchall()}
 
@@ -137,14 +134,14 @@ async def upload_mapping(
 
     # Get question ID mapping (external -> internal)
     q_result = await db.execute(
-        select(Question).where(Question.exam_id == exam_id)
+        select(Question).where(Question.exam_id == exam_id),
     )
     questions = {q.question_id_external: q for q in q_result.scalars().all()}
 
     # Clear existing mappings
     for q in questions.values():
         await db.execute(
-            delete(QuestionConceptMap).where(QuestionConceptMap.question_id == q.id)
+            delete(QuestionConceptMap).where(QuestionConceptMap.question_id == q.id),
         )
     await db.flush()
 
@@ -179,7 +176,6 @@ async def upload_graph(
     body: GraphUploadRequest,
     db: AsyncSession = Depends(get_db),
     _rl: None = Depends(enforce_instructor_write_limit),
-    _user: str = Depends(get_current_instructor),
 ):
     """Upload concept dependency graph as JSON.
 
@@ -217,7 +213,7 @@ async def upload_graph(
         select(ConceptGraph.version)
         .where(ConceptGraph.exam_id == exam_id)
         .order_by(ConceptGraph.version.desc())
-        .limit(1)
+        .limit(1),
     )
     current_version = v_result.scalar_one_or_none() or 0
 
@@ -246,7 +242,6 @@ async def upload_graph(
 async def scores_summary(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Aggregate statistics for uploaded scores."""
     from sqlalchemy import func, distinct
@@ -280,7 +275,6 @@ async def scores_summary(
 async def get_mapping(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Return the persisted question-to-concept mapping for an exam."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -288,7 +282,7 @@ async def get_mapping(
         raise HTTPException(status_code=404, detail="Exam not found")
 
     q_result = await db.execute(
-        select(Question).where(Question.exam_id == exam_id)
+        select(Question).where(Question.exam_id == exam_id),
     )
     questions = {q.id: q.question_id_external for q in q_result.scalars().all()}
 
@@ -297,7 +291,7 @@ async def get_mapping(
 
     m_result = await db.execute(
         select(QuestionConceptMap).where(
-            QuestionConceptMap.question_id.in_(list(questions.keys()))
+            QuestionConceptMap.question_id.in_(list(questions.keys())),
         )
     )
     mappings = m_result.scalars().all()

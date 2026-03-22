@@ -34,6 +34,3 @@ export const COMPUTE_POLL_MAX_ATTEMPTS = Math.max(
   Number(process.env.NEXT_PUBLIC_COMPUTE_POLL_MAX_ATTEMPTS ?? 60) || 60,
 );
 
-export const STORAGE_INSTRUCTOR_USER_KEY = 'instructor_basic_user';
-export const STORAGE_INSTRUCTOR_PASS_KEY = 'instructor_basic_pass';
-export const STORAGE_AUTH_TOKEN_KEY = 'prereq_token';
