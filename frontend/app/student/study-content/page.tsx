@@ -36,6 +36,8 @@ export default function StudentStudyContentPage() {
   const [modelId, setModelId] = useState('');
   const [voices, setVoices] = useState<Array<{ voice_id: string; name: string; language?: string }>>([]);
   const [genError, setGenError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!examId) return;
@@ -116,6 +118,21 @@ export default function StudentStudyContentPage() {
     }
   };
 
+  const handleDelete = async (c: StudyContent) => {
+    if (!globalThis.confirm('Remove this study content? This cannot be undone.')) return;
+    setDeletingId(c.id);
+    setDeleteError(null);
+    try {
+      await api.deleteStudentStudyContent(c.id);
+      setContent((prev) => prev.filter((x) => x.id !== c.id));
+      setOpenContent((prev) => (prev?.id === c.id ? null : prev));
+    } catch (e) {
+      setDeleteError(api.getFetchErrorMessage(e, 'Failed to delete'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (bootLoading || !examId) {
     return (
       <StudentLayout>
@@ -154,6 +171,11 @@ export default function StudentStudyContentPage() {
             {genError && (
               <p className="mt-2 text-sm text-destructive" role="alert">
                 {genError}
+              </p>
+            )}
+            {deleteError && (
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                {deleteError}
               </p>
             )}
           </div>
@@ -260,7 +282,13 @@ export default function StudentStudyContentPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {content.map((c) => (
-              <StudyContentCard key={c.id} content={c} onOpen={() => setOpenContent(c)} />
+              <StudyContentCard
+                key={c.id}
+                content={c}
+                onOpen={() => setOpenContent(c)}
+                onDelete={handleDelete}
+                deleting={deletingId === c.id}
+              />
             ))}
           </div>
 

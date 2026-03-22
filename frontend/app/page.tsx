@@ -32,10 +32,10 @@ export default function LandingPage() {
             />
           </h1>
           <BlurFadeIn delay={0.6} duration={0.5} direction="bottom" blur={8}>
-            <div className="h-1.5 w-32 bg-accent rounded-full mx-auto mt-4 mb-6" />
+            <div className="h-1.5 w-48 bg-accent rounded-full mx-auto mt-4 mb-6" />
           </BlurFadeIn>
           <BlurText
-            text="Upload exam data, map concepts, and get explainable readiness analytics — for instructors and students alike."
+            text="Transform raw exam scores into actionable study plans. Map concepts, trace gaps, and build readiness."
             className="text-lg md:text-xl text-white/70 max-w-2xl mx-auto mb-10"
             animateBy="words"
             direction="bottom"

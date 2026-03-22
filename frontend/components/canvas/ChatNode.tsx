@@ -112,7 +112,7 @@ export const ChatNode = memo(({ id, data }: any) => {
     return (
       <div
         onClick={() => setIsExpanded(true)}
-        className="px-4 py-2.5 bg-white rounded-full border border-[#E2E8F0] shadow-md cursor-pointer hover:border-[#00274C] transition-all min-w-[140px]"
+        className="px-4 py-2.5 bg-white rounded-md border border-[#E2E8F0] shadow-md cursor-pointer hover:border-[#00274C] transition-all min-w-[140px]"
       >
         <Handle type="target" position={Position.Left} id="left" className="magnetic-handle" />
         <Handle type="source" position={Position.Right} id="right" className="magnetic-handle" />
@@ -130,7 +130,7 @@ export const ChatNode = memo(({ id, data }: any) => {
   // ---- Expanded view ----
   return (
     <div
-      className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg relative"
+      className="bg-white rounded-md border border-[#E2E8F0] shadow-lg relative"
       style={{ width: '100%', height: '100%', minWidth: 320, minHeight: 360 }}
     >
       {/* Invisible magnetic handles — styled via CSS class */}
@@ -165,10 +165,10 @@ export const ChatNode = memo(({ id, data }: any) => {
       </NodeResizeControl>
 
       {/* Content wrapper — clips overflow so node never auto-grows */}
-      <div className="absolute inset-0 flex flex-col overflow-hidden rounded-xl">
+      <div className="absolute inset-0 flex flex-col overflow-hidden rounded-md">
 
       {/* ── Title bar ── */}
-      <div className="bg-[#00274C] rounded-t-xl flex flex-col shrink-0">
+      <div className="bg-[#00274C] rounded-t-md flex flex-col shrink-0">
         {/* Top row: window controls */}
         <div className="flex items-center justify-between h-8 pl-3 pr-0">
           <div className="flex items-center gap-1.5">
@@ -264,7 +264,7 @@ export const ChatNode = memo(({ id, data }: any) => {
             )}
             <button
               onClick={() => onDeleteNode?.(id)}
-              className="w-10 flex items-center justify-center hover:bg-red-500 transition-colors rounded-tr-xl"
+              className="w-10 flex items-center justify-center hover:bg-red-500 transition-colors rounded-tr-md"
               title="Close"
             >
               <X className="w-3.5 h-3.5 text-white/80" />

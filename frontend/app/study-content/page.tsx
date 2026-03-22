@@ -19,6 +19,8 @@ export default function InstructorStudyContentPage() {
   const [openContent, setOpenContent] = useState<StudyContent | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const loadContent = useCallback(async () => {
     if (!selectedExamId) return;
@@ -77,6 +79,22 @@ export default function InstructorStudyContentPage() {
     }
   };
 
+  const handleDelete = async (c: StudyContent) => {
+    if (!selectedExamId) return;
+    if (!globalThis.confirm('Remove this study content? This cannot be undone.')) return;
+    setDeletingId(c.id);
+    setDeleteError(null);
+    try {
+      await api.deleteStudyContent(selectedExamId, c.id);
+      setContent((prev) => prev.filter((x) => x.id !== c.id));
+      setOpenContent((prev) => (prev?.id === c.id ? null : prev));
+    } catch (e) {
+      setDeleteError(api.getFetchErrorMessage(e, 'Failed to delete'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (examLoading || !selectedExamId) {
     return (
       <InstructorLayout>
@@ -102,6 +120,11 @@ export default function InstructorStudyContentPage() {
             {genError && (
               <p className="mt-2 text-sm text-destructive" role="alert">
                 {genError}
+              </p>
+            )}
+            {deleteError && (
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                {deleteError}
               </p>
             )}
           </div>
@@ -149,7 +172,13 @@ export default function InstructorStudyContentPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {content.map((c) => (
-              <StudyContentCard key={c.id} content={c} onOpen={() => setOpenContent(c)} />
+              <StudyContentCard
+                key={c.id}
+                content={c}
+                onOpen={() => setOpenContent(c)}
+                onDelete={handleDelete}
+                deleting={deletingId === c.id}
+              />
             ))}
           </div>
 

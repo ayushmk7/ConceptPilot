@@ -208,6 +208,31 @@ class TestStudyContentEndpoints:
         assert data["slides_data"]["slides"][0]["title"] == "A"
 
     @pytest.mark.asyncio(loop_scope="session")
+    async def test_delete_study_content_for_exam_removes_row_and_file(self, client, db_session, seed_exam, tmp_path):
+        audio_path = tmp_path / "del.mp3"
+        audio_path.write_bytes(b"to-delete")
+
+        record = StudyContent(
+            exam_id=seed_exam["exam_id"],
+            content_type="podcast",
+            title="Delete me",
+            source_context={},
+            status="completed",
+            storage_key=f"file://{audio_path}",
+        )
+        db_session.add(record)
+        await db_session.flush()
+        cid = record.id
+
+        resp = await client.delete(f"/api/v1/exams/{seed_exam['exam_id']}/study-content/{cid}")
+        assert resp.status_code == 204
+
+        assert not audio_path.exists()
+
+        get_resp = await client.get(f"/api/v1/study-content/{cid}")
+        assert get_resp.status_code == 404
+
+    @pytest.mark.asyncio(loop_scope="session")
     async def test_project_scoped_study_content(self, client, db_session, seed_exam, monkeypatch):
         from app.routers import projects as projects_router
 
@@ -297,3 +322,119 @@ class TestStudyContentPipeline:
             assert stored.storage_key and stored.storage_key.startswith("s3://test-bucket/")
             saved = Path(scs._local_audio_path(content_id))
         assert saved.exists()
+
+    @pytest.mark.asyncio(loop_scope="session")
+    async def test_generation_pipeline_tts_failure_records_error(self, monkeypatch, tmp_path):
+        from app.services import study_content_service as scs
+
+        monkeypatch.setattr(scs.settings, "EXPORT_DIR", str(tmp_path), raising=False)
+
+        async def _fake_claude_content_outline(**kwargs):
+            return {
+                "transcript": "Short clip.",
+                "slides_data": {"slides": []},
+            }
+
+        async def _fake_synthesize_speech(_text: str, **_kwargs: object):
+            raise RuntimeError("ElevenLabs is not configured")
+
+        monkeypatch.setattr(scs, "_call_claude_content_outline", _fake_claude_content_outline)
+        monkeypatch.setattr(scs, "synthesize_speech", _fake_synthesize_speech)
+
+        async with scs.async_session() as setup_db:
+            course = Course(name="TTS fail course")
+            setup_db.add(course)
+            await setup_db.flush()
+            exam = Exam(course_id=course.id, name="TTS fail exam")
+            setup_db.add(exam)
+            await setup_db.flush()
+            record = StudyContent(
+                id=uuid.uuid4(),
+                exam_id=exam.id,
+                content_type="audio",
+                title="TTS fail",
+                source_context={},
+                status="pending",
+            )
+            setup_db.add(record)
+            await setup_db.commit()
+            content_id = record.id
+
+        await run_generation_for_content(content_id)
+
+        async with scs.async_session() as verify_db:
+            stored = await verify_db.get(StudyContent, content_id)
+            assert stored is not None
+            assert stored.status == "failed"
+            assert stored.error_detail and "ElevenLabs" in stored.error_detail
+
+    @pytest.mark.asyncio(loop_scope="session")
+    async def test_generation_pipeline_long_transcript_calls_tts_in_chunks(self, monkeypatch, tmp_path):
+        from app.services import elevenlabs_service as el
+        from app.services import study_content_service as scs
+
+        monkeypatch.setattr(scs.settings, "EXPORT_DIR", str(tmp_path), raising=False)
+        monkeypatch.setattr(scs.settings, "ELEVENLABS_TTS_CHUNK_CHARS", 800, raising=False)
+        monkeypatch.setattr(scs.settings, "ELEVENLABS_API_KEY", "k" * 20, raising=False)
+        monkeypatch.setattr(scs.settings, "ELEVENLABS_VOICE_ID", "test-voice-id", raising=False)
+
+        long_transcript = "Sentence one. " * 200  # >> 800 chars
+
+        async def _fake_claude_content_outline(**kwargs):
+            return {
+                "transcript": long_transcript,
+                "slides_data": {"slides": []},
+            }
+
+        calls: list[str] = []
+
+        async def _fake_synthesize_chunk(text: str, *, voice_id: str, model_id: str):
+            calls.append(text)
+            assert len(text) <= 800
+            return b"\xff\xe3"
+
+        async def _fake_put_object_bytes(_object_name, _payload, _content_type):
+            return True
+
+        monkeypatch.setattr(el, "_synthesize_speech_chunk", _fake_synthesize_chunk)
+        monkeypatch.setattr(scs, "_call_claude_content_outline", _fake_claude_content_outline)
+        monkeypatch.setattr(scs, "put_object_bytes", _fake_put_object_bytes)
+        monkeypatch.setattr(scs.settings, "VULTR_OBJECT_STORAGE_BUCKET", "test-bucket", raising=False)
+
+        async with scs.async_session() as setup_db:
+            course = Course(name="Chunk course")
+            setup_db.add(course)
+            await setup_db.flush()
+            exam = Exam(course_id=course.id, name="Chunk exam")
+            setup_db.add(exam)
+            await setup_db.flush()
+            record = StudyContent(
+                id=uuid.uuid4(),
+                exam_id=exam.id,
+                content_type="podcast",
+                title="Chunk run",
+                source_context={},
+                status="pending",
+            )
+            setup_db.add(record)
+            await setup_db.commit()
+            content_id = record.id
+
+        await run_generation_for_content(content_id)
+
+        assert len(calls) >= 2
+        async with scs.async_session() as verify_db:
+            stored = await verify_db.get(StudyContent, content_id)
+            assert stored is not None
+            assert stored.status == "completed"
+
+
+class TestElevenLabsSplitText:
+    def test_split_text_for_tts_chunks_oversized_block(self):
+        from app.services.elevenlabs_service import split_text_for_tts
+
+        max_c = 1000
+        text = "no-newlines-" + ("x" * 5000)
+        chunks = split_text_for_tts(text, max_c)
+        assert len(chunks) >= 5
+        assert all(len(c) <= max_c for c in chunks)

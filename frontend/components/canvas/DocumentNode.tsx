@@ -9,7 +9,7 @@ export const DocumentNode = memo(({ data }: any) => {
     return (
       <div
         onClick={() => setIsExpanded(true)}
-        className="px-4 py-3 bg-white rounded-lg border border-[#E2E8F0] shadow-md cursor-pointer hover:border-[#00274C] transition-all min-w-[100px]"
+        className="px-4 py-3 bg-white rounded-md border border-[#E2E8F0] shadow-md cursor-pointer hover:border-[#00274C] transition-all min-w-[100px]"
       >
         <Handle type="target" position={Position.Left} id="left" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
         <Handle type="source" position={Position.Right} id="right" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
@@ -25,7 +25,7 @@ export const DocumentNode = memo(({ data }: any) => {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-lg w-[350px]" style={{ height: '450px' }}>
+    <div className="bg-white rounded-md border border-[#E2E8F0] shadow-lg w-[350px]" style={{ height: '450px' }}>
       <Handle type="target" position={Position.Left} className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
       <Handle type="source" position={Position.Right} className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
 

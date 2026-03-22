@@ -25,7 +25,7 @@ export function SkillPicker({ currentSkill, onSelect }: SkillPickerProps) {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 px-2 py-0.5 bg-accent text-primary rounded text-xs font-medium hover:bg-accent/80 transition-colors"
+        className="flex items-center gap-1 px-2 py-0.5 bg-accent text-primary rounded text-xs font-medium hover:bg-accent/80 transition-colors whitespace-nowrap"
       >
         {active.label}
         <ChevronDown className="w-3 h-3" />
@@ -34,7 +34,7 @@ export function SkillPicker({ currentSkill, onSelect }: SkillPickerProps) {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-full mt-1 right-0 z-50 bg-white rounded-lg shadow-lg border border-border py-1 min-w-[200px]">
+          <div className="absolute top-full mt-1 left-0 z-50 bg-white rounded-lg shadow-lg border border-border py-1 min-w-[220px]">
             {SKILLS.map((skill) => (
               <button
                 key={skill.id}

@@ -271,6 +271,7 @@ class TestRouteExistence:
         ("GET", "/api/v1/projects/{project_id}/study-content"),
         ("POST", "/api/v1/exams/{exam_id}/study-content"),
         ("GET", "/api/v1/exams/{exam_id}/study-content"),
+        ("DELETE", "/api/v1/exams/{exam_id}/study-content/{content_id}"),
         ("GET", "/api/v1/study-content/{content_id}"),
         ("GET", "/api/v1/study-content/{content_id}/download"),
         ("GET", "/api/v1/study-content/{content_id}/stream"),

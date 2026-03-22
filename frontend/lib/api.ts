@@ -984,11 +984,15 @@ function mapStudyItem(x: {
   duration_seconds?: number | null;
   created_at: string;
   source_context?: Record<string, unknown>;
+  error_detail?: string | null;
 }): StudyContent {
   const dur =
     x.duration_seconds != null
       ? `${Math.floor(x.duration_seconds / 60)}:${String(x.duration_seconds % 60).padStart(2, '0')}`
       : undefined;
+  const failed = x.status === 'failed';
+  const errDetail =
+    typeof x.error_detail === 'string' && x.error_detail.trim() ? x.error_detail.trim() : undefined;
   return {
     id: x.id,
     type: mapContentType(x.content_type),
@@ -997,7 +1001,8 @@ function mapStudyItem(x: {
     duration: dur,
     slideCount: undefined,
     createdAt: x.created_at,
-    status: x.status === 'completed' ? 'ready' : x.status === 'failed' ? 'error' : 'generating',
+    status: x.status === 'completed' ? 'ready' : failed ? 'error' : 'generating',
+    errorDetail: failed ? errDetail : undefined,
   };
 }
 
@@ -1021,6 +1026,10 @@ export async function generateStudyContent(
     },
   });
   return mapStudyItem(item);
+}
+
+export async function deleteStudyContent(examId: string, contentId: string): Promise<void> {
+  await apiFetch(`/api/v1/exams/${examId}/study-content/${contentId}`, { method: 'DELETE' });
 }
 
 // ── Student workspace (uploads + study content; scoped by stored exam id) ──
@@ -1081,6 +1090,10 @@ export async function createStudentStudyContent(opts: {
     },
   });
   return mapStudyItem(item);
+}
+
+export async function deleteStudentStudyContent(contentId: string): Promise<void> {
+  await apiFetch(`/api/v1/student/study-content/${contentId}`, { method: 'DELETE' });
 }
 
 export async function listElevenLabsVoices(): Promise<

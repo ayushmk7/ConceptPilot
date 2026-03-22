@@ -17,6 +17,7 @@ def test_openapi_export_script_writes_schema(tmp_path):
     assert "/api/v1/projects/{project_id}" in schema["paths"]
     assert "/api/v1/projects/{project_id}/study-content" in schema["paths"]
     assert "/api/v1/exams/{exam_id}/study-content" in schema["paths"]
+    assert "/api/v1/exams/{exam_id}/study-content/{content_id}" in schema["paths"]
     assert "/api/v1/study-content/{content_id}" in schema["paths"]
     assert "/api/v1/canvas-workspaces" in schema["paths"]
     assert "/api/v1/canvas-workspaces/{workspace_id}" in schema["paths"]

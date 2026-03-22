@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -12,7 +13,7 @@ from app.config import settings
 logger = logging.getLogger("conceptpilot.elevenlabs")
 
 _TIMEOUT = httpx.Timeout(5.0, connect=3.0)
-_TTS_TIMEOUT = httpx.Timeout(45.0, connect=5.0)
+_TTS_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
 
 
 def _is_configured() -> bool:
@@ -46,25 +47,81 @@ async def check_api_reachable() -> tuple[bool, str]:
         return False, f"error: {str(exc)[:80]}"
 
 
-async def synthesize_speech(
+def split_text_for_tts(text: str, max_chars: int) -> list[str]:
+    """Split transcript into segments under ElevenLabs per-request size limits.
+
+    Paragraphs are preserved where possible; oversized paragraphs are split on
+    sentence boundaries, then hard-split if needed.
+    """
+    text = text.strip()
+    if not text:
+        return []
+    max_chars = max(500, int(max_chars))
+    if len(text) <= max_chars:
+        return [text]
+
+    chunks: list[str] = []
+    buf = ""
+    for part in text.split("\n\n"):
+        part = part.strip()
+        if not part:
+            continue
+        if len(part) > max_chars:
+            if buf:
+                chunks.append(buf.strip())
+                buf = ""
+            chunks.extend(_split_oversized_block(part, max_chars))
+            continue
+        candidate = f"{buf}\n\n{part}" if buf else part
+        if len(candidate) <= max_chars:
+            buf = candidate
+        else:
+            if buf:
+                chunks.append(buf.strip())
+            buf = part
+    if buf:
+        chunks.append(buf.strip())
+    return [c for c in chunks if c]
+
+
+def _split_oversized_block(block: str, max_chars: int) -> list[str]:
+    out: list[str] = []
+    buf = ""
+    # Sentence-ish boundaries (avoid regex catastrophic backtracking on huge strings).
+    sentences = re.split(r"(?<=[.!?])\s+", block)
+    for s in sentences:
+        if not s:
+            continue
+        if len(s) > max_chars:
+            if buf:
+                out.append(buf.strip())
+                buf = ""
+            for i in range(0, len(s), max_chars):
+                piece = s[i : i + max_chars].strip()
+                if piece:
+                    out.append(piece)
+            continue
+        if len(buf) + len(s) + 1 <= max_chars:
+            buf = f"{buf} {s}".strip() if buf else s
+        else:
+            if buf:
+                out.append(buf.strip())
+            buf = s
+    if buf:
+        out.append(buf.strip())
+    return out if out else [block[:max_chars]]
+
+
+async def _synthesize_speech_chunk(
     text: str,
     *,
-    voice_id: str | None = None,
-    model_id: str | None = None,
+    voice_id: str,
+    model_id: str,
 ) -> bytes:
-    """Synthesize speech with ElevenLabs and return MP3 bytes."""
-    if not _is_configured():
-        raise RuntimeError("ElevenLabs is not configured")
-    vid = (voice_id or settings.ELEVENLABS_VOICE_ID or "").strip()
-    if not vid:
-        raise RuntimeError("ELEVENLABS_VOICE_ID is required for speech synthesis (or pass voice_id)")
-
-    mid = (model_id or settings.ELEVENLABS_MODEL_ID or "eleven_multilingual_v2").strip()
-
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{vid}"
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     payload = {
         "text": text,
-        "model_id": mid,
+        "model_id": model_id,
     }
     headers = {
         "xi-api-key": settings.ELEVENLABS_API_KEY,
@@ -80,6 +137,35 @@ async def synthesize_speech(
             detail = resp.text[:200]
             raise RuntimeError(f"ElevenLabs synthesis failed ({resp.status_code}): {detail}")
         return resp.content
+
+
+async def synthesize_speech(
+    text: str,
+    *,
+    voice_id: str | None = None,
+    model_id: str | None = None,
+) -> bytes:
+    """Synthesize speech with ElevenLabs and return MP3 bytes (chunked for long text)."""
+    if not _is_configured():
+        raise RuntimeError("ElevenLabs is not configured")
+    vid = (voice_id or settings.ELEVENLABS_VOICE_ID or "").strip()
+    if not vid:
+        raise RuntimeError("ELEVENLABS_VOICE_ID is required for speech synthesis (or pass voice_id)")
+
+    mid = (model_id or settings.ELEVENLABS_MODEL_ID or "eleven_multilingual_v2").strip()
+
+    max_chars = settings.ELEVENLABS_TTS_CHUNK_CHARS
+    chunks = split_text_for_tts(text, max_chars)
+    if not chunks:
+        raise RuntimeError("Empty transcript for speech synthesis")
+
+    if len(chunks) > 1:
+        logger.info("ElevenLabs TTS using %d chunk(s), max_chars=%s", len(chunks), max_chars)
+
+    parts: list[bytes] = []
+    for chunk in chunks:
+        parts.append(await _synthesize_speech_chunk(chunk, voice_id=vid, model_id=mid))
+    return b"".join(parts)
 
 
 async def list_voices() -> list[dict[str, Any]]:

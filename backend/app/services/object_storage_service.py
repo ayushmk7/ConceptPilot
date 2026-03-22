@@ -132,3 +132,39 @@ async def get_object_bytes(object_name: str) -> bytes | None:
     except Exception:
         logger.exception("Failed object storage download: %s", object_name)
         return None
+
+
+def _delete_object_blocking(object_name: str) -> bool:
+    try:
+        import boto3
+        from botocore.config import Config as BotoConfig
+    except Exception:
+        logger.warning("boto3 unavailable; skipping S3 delete for %s", object_name)
+        return False
+    if not _is_enabled():
+        return False
+    try:
+        client = boto3.client(
+            "s3",
+            endpoint_url=settings.VULTR_OBJECT_STORAGE_ENDPOINT,
+            aws_access_key_id=settings.VULTR_OBJECT_STORAGE_ACCESS_KEY,
+            aws_secret_access_key=settings.VULTR_OBJECT_STORAGE_SECRET_KEY,
+            config=BotoConfig(signature_version="s3v4"),
+        )
+        bucket = settings.VULTR_OBJECT_STORAGE_BUCKET
+        client.delete_object(Bucket=bucket, Key=object_name)
+        return True
+    except Exception:
+        logger.exception("Failed object storage delete: %s", object_name)
+        return False
+
+
+async def delete_object_key(object_name: str) -> bool:
+    """Remove an object from S3-compatible storage (best-effort)."""
+    if not _is_enabled():
+        return False
+    try:
+        return await asyncio.to_thread(_delete_object_blocking, object_name)
+    except Exception:
+        logger.exception("Failed object storage delete: %s", object_name)
+        return False

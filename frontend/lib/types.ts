@@ -161,6 +161,8 @@ export interface StudyContent {
   url?: string;
   createdAt: string;
   status: 'ready' | 'generating' | 'error';
+  /** Server-side failure reason when status is error (mapped from API error_detail). */
+  errorDetail?: string;
 }
 
 export interface SlideData {
