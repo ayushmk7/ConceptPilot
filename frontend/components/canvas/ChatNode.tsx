@@ -15,7 +15,7 @@ import {
 import { MessageList } from './chat/MessageList';
 import { MessageInput } from './chat/MessageInput';
 import { SkillPicker } from './chat/SkillPicker';
-import { useStreamingChat, type LocalMessage } from './hooks/useStreamingChat';
+import { useStreamingChat, type LocalMessage, type ToolResultPayload } from './hooks/useStreamingChat';
 
 /** Callback the parent canvas page wires in via node data. */
 export type OnBranchCreate = (
@@ -40,11 +40,14 @@ export const ChatNode = memo(({ id, data }: any) => {
   const onDeleteNode: ((nodeId: string) => void) | undefined = data.onDeleteNode;
   const linkedContext: LocalMessage[] | undefined = data.linkedContext;
   const autoBranch: boolean = data.autoBranch ?? false;
+  const sessionId: string | undefined = data.sessionId;
+  const onToolResult: ((payload: ToolResultPayload) => void) | undefined = data.onToolResult;
 
-  const { messages, isLoading, error, send, clearError } = useStreamingChat(
-    id,
-    initialMessages ? { initialMessages } : undefined,
-  );
+  const { messages, isLoading, error, send, clearError } = useStreamingChat(id, {
+    initialMessages,
+    sessionId,
+    onToolResult,
+  });
 
   // --- Branching logic ---
 

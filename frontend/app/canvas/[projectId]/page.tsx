@@ -33,16 +33,96 @@ import { SettingsPanel } from '@/components/canvas/panels/SettingsPanel';
 import { LinearChatView } from '@/components/canvas/views/LinearChatView';
 import { ViewToggle } from '@/components/canvas/views/ViewToggle';
 import { useCanvasEntrance } from '@/components/canvas/hooks/useCanvasEntrance';
+import { useCanvasSocket } from '@/components/canvas/hooks/useCanvasSocket';
 import '@/components/canvas/animations/canvas-entrance.css';
 import {
   getStudentCanvasWorkspace,
   loadCanvasProject,
   saveCanvasProject,
   updateStudentCanvasWorkspace,
+  infGetProject,
+  infCreateNode,
+  infCreateEdge,
+  infDeleteNode,
+  infUpdateNode,
+  infJoinSession,
   type CanvasProject,
+  type InfCanvasNode as ApiNode,
+  type InfCanvasEdge as ApiEdge,
+  type CanvasNodeType,
 } from '@/lib/canvas-api';
-import { useStreamingChat, type LocalMessage } from '@/components/canvas/hooks/useStreamingChat';
+import {
+  useStreamingChat,
+  type LocalMessage,
+  type ToolResultPayload,
+} from '@/components/canvas/hooks/useStreamingChat';
 import { useStudentBootstrapOptional } from '@/lib/student-context';
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+interface NodeCallbacks {
+  onBranchCreate: OnBranchCreate;
+  onBranchPlaceStart: OnBranchCreate;
+  onFocusNode: (id: string) => void;
+  onLinkStart: (id: string, msgs: LocalMessage[]) => void;
+  onDeleteNode: (id: string) => void;
+  onToolResult?: (payload: ToolResultPayload) => void;
+  sessionId?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Module-level helpers                                               */
+/* ------------------------------------------------------------------ */
+
+/** Retrieve or generate a persistent display name for this browser. */
+function getOrCreateDisplayName(): string {
+  if (typeof window === 'undefined') return 'User';
+  const stored = localStorage.getItem('canvas_display_name');
+  if (stored) return stored;
+  const name = `User-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  localStorage.setItem('canvas_display_name', name);
+  return name;
+}
+
+/** Convert an InfCanvasNode (backend shape) to a React Flow Node. */
+function apiNodeToRF(node: ApiNode, cb: NodeCallbacks): Node {
+  const data: Record<string, unknown> = {
+    title: node.title,
+    skill: node.skill ?? 'Tutor',
+    messages: [],
+  };
+  if (node.type === 'chat') {
+    data.onBranchCreate = cb.onBranchCreate;
+    data.onBranchPlaceStart = cb.onBranchPlaceStart;
+    data.onFocusNode = cb.onFocusNode;
+    data.onLinkStart = cb.onLinkStart;
+    data.onDeleteNode = cb.onDeleteNode;
+    data.onToolResult = cb.onToolResult;
+    data.sessionId = cb.sessionId;
+    data.autoBranch = false;
+  }
+  return {
+    id: node.id,
+    type: node.type,
+    position: { x: node.position_x, y: node.position_y },
+    style: node.type === 'chat' ? { width: 420, height: 520 } : undefined,
+    data,
+  };
+}
+
+/** Convert an InfCanvasEdge (backend shape) to a React Flow Edge. */
+function apiEdgeToRF(edge: ApiEdge): Edge {
+  return {
+    id: edge.id,
+    source: edge.source_node_id,
+    target: edge.target_node_id,
+    type: 'smart',
+    animated: true,
+    style: { stroke: '#CBD5E1', strokeWidth: 2 },
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /*  Defaults                                                           */
@@ -81,8 +161,8 @@ function CanvasPageInner() {
   const roleSuffix = isStudentCanvas ? '?role=student' : '';
   const boot = useStudentBootstrapOptional();
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(defaultEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [workspaceName, setWorkspaceName] = useState('Untitled Workspace');
   const [showSettings, setShowSettings] = useState(false);
   const [viewMode, setViewMode] = useState<'canvas' | 'linear'>('canvas');
@@ -100,10 +180,18 @@ function CanvasPageInner() {
   /** Gate auto-save until initial load (API or localStorage) has finished. */
   const [hydrated, setHydrated] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  /** Real canvas session ID from infJoinSession. Null until resolved. */
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
   const { entranceClass, onInit: onCanvasInit } = useCanvasEntrance();
   const { screenToFlowPosition } = useReactFlow();
 
-  /* ── Wrap onInit to also fit-view once (instead of reactive fitView prop) ── */
+  // Keep a synchronous ref so non-effect callbacks can read current nodes
+  // without using the setNodes(prev => ...) form.
+  const nodesRef = useRef<Node[]>([]);
+  nodesRef.current = nodes;
+
+  /* ── Wrap onInit to also fit-view once ── */
   const handleFlowInit = useCallback(
     (instance: ReactFlowInstance) => {
       onCanvasInit(instance);
@@ -153,7 +241,6 @@ function CanvasPageInner() {
     [nodes, activeFocusNodeId],
   );
   const activeChatId = activeChatNode?.id ?? 'linear-fallback';
-  const linearChat = useStreamingChat(activeChatId);
 
   const toggleView = useCallback(() => {
     setViewMode((v) => {
@@ -181,6 +268,10 @@ function CanvasPageInner() {
     (nodeId: string) => {
       setNodes((nds) => nds.filter((n) => n.id !== nodeId));
       setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+      // Persist deletion to backend (fire-and-forget; local IDs are never in backend)
+      if (!nodeId.startsWith('local-')) {
+        infDeleteNode(nodeId).catch(() => { /* ignore */ });
+      }
     },
     [setNodes, setEdges],
   );
@@ -197,7 +288,6 @@ function CanvasPageInner() {
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (!pendingLink) return;
-      // Cancel if clicking the source node itself
       if (node.id === pendingLink.sourceNodeId) {
         setPendingLink(null);
         return;
@@ -206,7 +296,6 @@ function CanvasPageInner() {
       const { sourceNodeId, messages: linkMessages } = pendingLink;
       setPendingLink(null);
 
-      // Create purple link edge
       setEdges((eds) => [
         ...eds,
         {
@@ -220,7 +309,6 @@ function CanvasPageInner() {
         },
       ]);
 
-      // Add linked context to target node
       setNodes((nds) =>
         nds.map((n) => {
           if (n.id === node.id) {
@@ -249,10 +337,7 @@ function CanvasPageInner() {
     [],
   );
 
-  /* ── Branch handler ──
-   * Uses a ref so the function identity is stable (no infinite loops).
-   * Reads current nodes via the setNodes callback form.
-   */
+  /* ── Branch handler ── */
   const branchRef = useRef<OnBranchCreate | null>(null);
 
   const stableBranchCreate: OnBranchCreate = useCallback(
@@ -262,58 +347,136 @@ function CanvasPageInner() {
     [],
   );
 
-  branchRef.current = useCallback(
-    (sourceNodeId: string, messages: LocalMessage[]) => {
-      setNodes((currentNodes) => {
-        const sourceNode = currentNodes.find((n) => n.id === sourceNodeId);
-        const offsetX = sourceNode ? sourceNode.position.x + 460 : 500;
-        const offsetY = sourceNode ? sourceNode.position.y + 40 : 200;
+  /* ── Create a node in the backend; return its UUID (or a local fallback) ── */
+  const createBackendNodeId = useCallback(
+    async (
+      type: CanvasNodeType,
+      title: string,
+      x: number,
+      y: number,
+      skill?: string,
+    ): Promise<string> => {
+      try {
+        const node = await infCreateNode(projectId, {
+          type,
+          title,
+          position_x: Math.round(x),
+          position_y: Math.round(y),
+          skill,
+        });
+        return node.id;
+      } catch {
+        return `local-${Date.now()}`;
+      }
+    },
+    [projectId],
+  );
 
-        const newId = `chat-branch-${Date.now()}`;
-        const newNode: Node = {
-          id: newId,
-          type: 'chat',
-          className: 'node-pop-in',
-          position: { x: offsetX, y: offsetY },
-          style: { width: 420, height: 520 },
-          data: {
-            title: `Branch from ${(sourceNode?.data as any)?.title ?? 'Chat'}`,
-            skill: (sourceNode?.data as any)?.skill ?? 'Tutor',
-            initialMessages: messages,
-            onBranchCreate: stableBranchCreate,
-            onBranchPlaceStart: handleBranchPlaceStart,
-            onFocusNode: handleFocusNode,
-            onLinkStart: handleLinkStart,
-            onDeleteNode: handleDeleteNode,
-            autoBranch: false,
-          },
-        };
+  /* ── Tool-result handler: add Claude-created nodes to canvas ──
+   * Uses a ref wrapper so node data never holds a stale closure.
+   */
+  // Stable-identity wrapper for tool results — defined before the impl so it
+  // can be passed into node data closures without circular reference issues.
+  const handleToolResultRef = useRef<(payload: ToolResultPayload) => void>(() => { /* pending */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableHandleToolResult = useCallback(
+    (payload: ToolResultPayload) => handleToolResultRef.current(payload),
+    [],
+  );
 
-        // Add edge separately (can't call setEdges inside setNodes callback)
-        setTimeout(() => {
-          setEdges((eds) => [
-            ...eds,
-            {
-              id: `e-${sourceNodeId}-${newId}`,
-              source: sourceNodeId,
-              target: newId,
-              type: 'smart',
-              animated: true,
-              style: { stroke: '#7C3AED', strokeWidth: 2 },
-            },
-          ]);
-        }, 0);
-
-        return [...currentNodes, newNode];
+  const handleToolResultImpl = useCallback(
+    (payload: ToolResultPayload) => {
+      setNodes((prev) => {
+        const toAdd = payload.nodes
+          .filter((n) => !prev.some((p) => p.id === n.id))
+          .map((n) =>
+            apiNodeToRF(n, {
+              onBranchCreate: stableBranchCreate,
+              onBranchPlaceStart: handleBranchPlaceStart,
+              onFocusNode: handleFocusNode,
+              onLinkStart: handleLinkStart,
+              onDeleteNode: handleDeleteNode,
+              onToolResult: stableHandleToolResult,
+              sessionId: sessionId ?? undefined,
+            }),
+          );
+        return toAdd.length ? [...prev, ...toAdd] : prev;
+      });
+      setEdges((prev) => {
+        const toAdd = payload.edges
+          .filter((e) => !prev.some((p) => p.id === e.id))
+          .map(apiEdgeToRF);
+        return toAdd.length ? [...prev, ...toAdd] : prev;
       });
     },
-    [setNodes, setEdges, stableBranchCreate],
+    [setNodes, setEdges, stableBranchCreate, handleBranchPlaceStart, handleFocusNode, handleLinkStart, handleDeleteNode, stableHandleToolResult, sessionId],
+  );
+  // Keep the ref current so stableHandleToolResult always calls the latest impl.
+  handleToolResultRef.current = handleToolResultImpl;
+
+  /* ── Linear-view chat (uses real session ID + tool-result wiring) ── */
+  const linearChat = useStreamingChat(activeChatId, {
+    sessionId: sessionId ?? undefined,
+    onToolResult: stableHandleToolResult,
+  });
+
+  /* ── Branch handler implementation (async — creates backend node first) ── */
+  branchRef.current = useCallback(
+    async (sourceNodeId: string, messages: LocalMessage[]) => {
+      const sourceNode = nodesRef.current.find((n) => n.id === sourceNodeId);
+      const offsetX = sourceNode ? sourceNode.position.x + 460 : 500;
+      const offsetY = sourceNode ? sourceNode.position.y + 40 : 200;
+      const title = `Branch from ${(sourceNode?.data as any)?.title ?? 'Chat'}`;
+      const skill = (sourceNode?.data as any)?.skill ?? 'Tutor';
+
+      const newId = await createBackendNodeId('chat', title, offsetX, offsetY, skill);
+
+      // Create edge in backend only when both ends are real nodes
+      if (!newId.startsWith('local-') && !sourceNodeId.startsWith('local-')) {
+        infCreateEdge(projectId, sourceNodeId, newId).catch(() => { /* ignore */ });
+      }
+
+      const newNode: Node = {
+        id: newId,
+        type: 'chat',
+        className: 'node-pop-in',
+        position: { x: offsetX, y: offsetY },
+        style: { width: 420, height: 520 },
+        data: {
+          title,
+          skill,
+          initialMessages: messages,
+          onBranchCreate: stableBranchCreate,
+          onBranchPlaceStart: handleBranchPlaceStart,
+          onFocusNode: handleFocusNode,
+          onLinkStart: handleLinkStart,
+          onDeleteNode: handleDeleteNode,
+          onToolResult: stableHandleToolResult,
+          sessionId: sessionId ?? undefined,
+          autoBranch: false,
+        },
+      };
+
+      setNodes((prev) => [...prev, newNode]);
+      setEdges((prev) => [
+        ...prev,
+        {
+          id: `e-${sourceNodeId}-${newId}`,
+          source: sourceNodeId,
+          target: newId,
+          type: 'smart',
+          animated: true,
+          style: { stroke: '#7C3AED', strokeWidth: 2 },
+        },
+      ]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setNodes, setEdges, stableBranchCreate, handleBranchPlaceStart, handleFocusNode, handleLinkStart, handleDeleteNode, stableHandleToolResult, createBackendNodeId, projectId, sessionId],
   );
 
   /* ── Placement mode: finalize on pane click (branch or add) ── */
   const onPaneClick = useCallback(
-    (event: React.MouseEvent) => {
-      // If in link mode, clicking pane cancels linking
+    async (event: React.MouseEvent) => {
       if (pendingLink) {
         setPendingLink(null);
         return;
@@ -325,49 +488,56 @@ function CanvasPageInner() {
         const { sourceNodeId, messages } = pendingBranch;
         setPendingBranch(null);
 
-        setNodes((currentNodes) => {
-          const sourceNode = currentNodes.find((n) => n.id === sourceNodeId);
-          const newId = `chat-branch-${Date.now()}`;
-          const newNode: Node = {
-            id: newId,
-            type: 'chat',
-            className: 'node-pop-in',
-            position: flowPos,
-            style: { width: 420, height: 520 },
-            data: {
-              title: `Branch from ${(sourceNode?.data as any)?.title ?? 'Chat'}`,
-              skill: (sourceNode?.data as any)?.skill ?? 'Tutor',
-              initialMessages: messages,
-              onBranchCreate: stableBranchCreate,
-              onBranchPlaceStart: handleBranchPlaceStart,
-              onFocusNode: handleFocusNode,
-              onLinkStart: handleLinkStart,
-              onDeleteNode: handleDeleteNode,
-              autoBranch: false,
-            },
-          };
+        const sourceNode = nodesRef.current.find((n) => n.id === sourceNodeId);
+        const title = `Branch from ${(sourceNode?.data as any)?.title ?? 'Chat'}`;
+        const skill = (sourceNode?.data as any)?.skill ?? 'Tutor';
 
-          setTimeout(() => {
-            setEdges((eds) => [
-              ...eds,
-              {
-                id: `e-${sourceNodeId}-${newId}`,
-                source: sourceNodeId,
-                target: newId,
-                type: 'smart',
-                animated: true,
-                style: { stroke: '#7C3AED', strokeWidth: 2 },
-              },
-            ]);
-          }, 0);
+        const newId = await createBackendNodeId('chat', title, flowPos.x, flowPos.y, skill);
 
-          return [...currentNodes, newNode];
-        });
+        if (!newId.startsWith('local-') && !sourceNodeId.startsWith('local-')) {
+          infCreateEdge(projectId, sourceNodeId, newId).catch(() => { /* ignore */ });
+        }
+
+        const newNode: Node = {
+          id: newId,
+          type: 'chat',
+          className: 'node-pop-in',
+          position: flowPos,
+          style: { width: 420, height: 520 },
+          data: {
+            title,
+            skill,
+            initialMessages: messages,
+            onBranchCreate: stableBranchCreate,
+            onBranchPlaceStart: handleBranchPlaceStart,
+            onFocusNode: handleFocusNode,
+            onLinkStart: handleLinkStart,
+            onDeleteNode: handleDeleteNode,
+            onToolResult: stableHandleToolResult,
+            sessionId: sessionId ?? undefined,
+            autoBranch: false,
+          },
+        };
+
+        setNodes((prev) => [...prev, newNode]);
+        setEdges((prev) => [
+          ...prev,
+          {
+            id: `e-${sourceNodeId}-${newId}`,
+            source: sourceNodeId,
+            target: newId,
+            type: 'smart',
+            animated: true,
+            style: { stroke: '#7C3AED', strokeWidth: 2 },
+          },
+        ]);
       } else if (pendingAdd) {
         setPendingAdd(null);
 
+        const newId = await createBackendNodeId('chat', 'New Chat', flowPos.x, flowPos.y, 'Tutor');
+
         const newNode: Node = {
-          id: `chat-${Date.now()}`,
+          id: newId,
           type: 'chat',
           className: 'node-pop-in',
           position: flowPos,
@@ -381,13 +551,16 @@ function CanvasPageInner() {
             onFocusNode: handleFocusNode,
             onLinkStart: handleLinkStart,
             onDeleteNode: handleDeleteNode,
+            onToolResult: stableHandleToolResult,
+            sessionId: sessionId ?? undefined,
             autoBranch: false,
           },
         };
-        setNodes((nds) => [...nds, newNode]);
+        setNodes((prev) => [...prev, newNode]);
       }
     },
-    [pendingBranch, pendingAdd, pendingLink, screenToFlowPosition, setNodes, setEdges, stableBranchCreate, handleBranchPlaceStart, handleFocusNode, handleLinkStart],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pendingBranch, pendingAdd, pendingLink, screenToFlowPosition, setNodes, setEdges, stableBranchCreate, handleBranchPlaceStart, handleFocusNode, handleLinkStart, handleDeleteNode, stableHandleToolResult, createBackendNodeId, projectId, sessionId],
   );
 
   /* ── Inject onBranchCreate into chat nodes once on mount ── */
@@ -400,17 +573,38 @@ function CanvasPageInner() {
         if (n.type === 'chat') {
           return {
             ...n,
-            data: { ...n.data, onBranchCreate: stableBranchCreate, onBranchPlaceStart: handleBranchPlaceStart, onFocusNode: handleFocusNode, onLinkStart: handleLinkStart, onDeleteNode: handleDeleteNode },
+            data: {
+              ...n.data,
+              onBranchCreate: stableBranchCreate,
+              onBranchPlaceStart: handleBranchPlaceStart,
+              onFocusNode: handleFocusNode,
+              onLinkStart: handleLinkStart,
+              onDeleteNode: handleDeleteNode,
+              onToolResult: stableHandleToolResult,
+            },
           };
         }
         return n;
       }),
     );
-  }, [setNodes, stableBranchCreate, handleFocusNode]);
+  }, [setNodes, stableBranchCreate, handleFocusNode, stableHandleToolResult]);
 
-  /* ── Load project: student → Postgres via GET /student/canvas-workspace; instructor → localStorage ── */
+  /* ── Load project ──
+   * Instructor path: load from backend (infGetProject), fall back to localStorage.
+   * Student path: load from /api/v1/student/canvas-workspace, fall back to localStorage.
+   */
   useEffect(() => {
     let cancelled = false;
+
+    /** Helpers for converting backend shapes to RF nodes with callbacks. */
+    const callbacks: NodeCallbacks = {
+      onBranchCreate: stableBranchCreate,
+      onBranchPlaceStart: handleBranchPlaceStart,
+      onFocusNode: handleFocusNode,
+      onLinkStart: handleLinkStart,
+      onDeleteNode: handleDeleteNode,
+      onToolResult: stableHandleToolResult,
+    };
 
     function applyFromSerialized(
       saved: CanvasProject,
@@ -421,11 +615,16 @@ function CanvasPageInner() {
       if (extra?.viewMode === 'linear' || extra?.viewMode === 'canvas') setViewMode(extra.viewMode);
       if (extra?.files && extra.files.length > 0) setFiles(extra.files);
 
-      if (saved.nodes.length > 0) {
+      // Strip out stub nodes (non-UUID ids like '1') that may have been
+      // persisted before the backend was wired up.
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validNodes = (saved.nodes as Node[]).filter((n) => UUID_RE.test(n.id));
+
+      if (validNodes.length > 0) {
         const startX = typeof window !== 'undefined' ? window.innerWidth / 2 - 200 : 500;
         const startY = typeof window !== 'undefined' ? window.innerHeight / 2 - 200 : 300;
 
-        const loadedNodes = (saved.nodes as Node[]).map((n) => {
+        const loadedNodes = validNodes.map((n) => {
           const finalPos = n.position;
           const nodeObj = {
             ...n,
@@ -441,6 +640,7 @@ function CanvasPageInner() {
                 onFocusNode: handleFocusNode,
                 onLinkStart: handleLinkStart,
                 onDeleteNode: handleDeleteNode,
+                onToolResult: stableHandleToolResult,
                 _finalPosition: finalPos,
               },
             };
@@ -554,17 +754,51 @@ function CanvasPageInner() {
         return;
       }
 
-      const saved = loadCanvasProject(projectId);
-      if (saved) {
-        applyFromSerialized(saved);
+      // ── Instructor / infinite canvas: load from backend ──
+      try {
+        const project = await infGetProject(projectId);
+        if (cancelled) return;
+
+        setWorkspaceName(project.title);
+
+        if (project.nodes.length > 0) {
+          setNodes(project.nodes.map((n) => apiNodeToRF(n, callbacks)));
+        } else {
+          // New project — create a real node so messages don't 404
+          const startX = typeof window !== 'undefined' ? window.innerWidth / 2 - 210 : 300;
+          const startY = typeof window !== 'undefined' ? window.innerHeight / 2 - 260 : 200;
+          infCreateNode(projectId, {
+            type: 'chat',
+            title: 'Chat',
+            position_x: Math.round(startX),
+            position_y: Math.round(startY),
+            skill: 'Tutor',
+          }).then((node) => {
+            if (cancelled) return;
+            setNodes([apiNodeToRF(node, callbacks)]);
+          }).catch(() => { /* leave defaultNodes stub in place */ });
+        }
+        if (project.edges.length > 0) {
+          setEdges(project.edges.map(apiEdgeToRF));
+        }
+
+        // Also check localStorage for file chips (not stored in backend)
+        const rawFiles = localStorage.getItem(`canvas_files_${projectId}`);
+        if (rawFiles) {
+          try { setFiles(JSON.parse(rawFiles)); } catch { /* ignore */ }
+        }
+      } catch {
+        // Backend unreachable: fall back to localStorage snapshot
+        const saved = loadCanvasProject(projectId);
+        if (cancelled) return;
+        if (saved) applyFromSerialized(saved);
       }
+
       setHydrated(true);
     }
 
     void run();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [
     isStudentCanvas,
     boot,
@@ -574,11 +808,40 @@ function CanvasPageInner() {
     handleFocusNode,
     handleLinkStart,
     handleDeleteNode,
+    stableHandleToolResult,
     setNodes,
     setEdges,
   ]);
 
-  /* ── Auto-save on changes (debounced): student → API; instructor → localStorage ── */
+  /* ── Join multiplayer session ── */
+  useEffect(() => {
+    if (isStudentCanvas) return; // student canvas uses a separate session model
+    let cancelled = false;
+    const displayName = getOrCreateDisplayName();
+    infJoinSession(projectId, displayName)
+      .then((s) => {
+        if (!cancelled) setSessionId(s.session_id);
+      })
+      .catch(() => {
+        // Backend unreachable — use a local UUID so the socket stub still works
+        if (!cancelled) setSessionId(`local-${Math.random().toString(36).slice(2)}`);
+      });
+    return () => { cancelled = true; };
+  }, [projectId, isStudentCanvas]);
+
+  /* ── Propagate sessionId into existing chat nodes' data ── */
+  useEffect(() => {
+    if (!sessionId) return;
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (n.type !== 'chat') return n;
+        if ((n.data as any).sessionId === sessionId) return n; // no-op
+        return { ...n, data: { ...n.data, sessionId } };
+      }),
+    );
+  }, [sessionId, setNodes]);
+
+  /* ── Auto-save on changes (debounced) ── */
   useEffect(() => {
     if (!hydrated) return;
     const timer = setTimeout(() => {
@@ -610,9 +873,7 @@ function CanvasPageInner() {
             viewMode,
             files,
           },
-        }).catch(() => {
-          /* offline / network; keep local copy for resilience */
-        });
+        }).catch(() => { /* offline / network */ });
         const project: CanvasProject = {
           id: projectId,
           name: workspaceName,
@@ -626,6 +887,7 @@ function CanvasPageInner() {
         return;
       }
 
+      // Instructor: keep localStorage as resilience cache
       const project: CanvasProject = {
         id: projectId,
         name: workspaceName,
@@ -635,7 +897,6 @@ function CanvasPageInner() {
         updated_at: new Date().toISOString(),
       };
       saveCanvasProject(project);
-
       localStorage.setItem(`canvas_files_${projectId}`, JSON.stringify(files));
 
       const rawIndex = localStorage.getItem('canvas_projects_index');
@@ -652,14 +913,67 @@ function CanvasPageInner() {
     return () => clearTimeout(timer);
   }, [nodes, edges, workspaceName, projectId, files, hydrated, isStudentCanvas, viewMode]);
 
+  /* ── Multiplayer WebSocket ── */
+  const { users, sendNodeMoved } = useCanvasSocket(projectId, sessionId, {
+    onNodeCreated: (node) => {
+      setNodes((prev) => {
+        if (prev.some((n) => n.id === node.id)) return prev; // dedup
+        return [
+          ...prev,
+          apiNodeToRF(node, {
+            onBranchCreate: stableBranchCreate,
+            onBranchPlaceStart: handleBranchPlaceStart,
+            onFocusNode: handleFocusNode,
+            onLinkStart: handleLinkStart,
+            onDeleteNode: handleDeleteNode,
+            onToolResult: stableHandleToolResult,
+            sessionId: sessionId ?? undefined,
+          }),
+        ];
+      });
+    },
+    onNodeMoved: (nodeId, x, y) => {
+      setNodes((prev) =>
+        prev.map((n) => (n.id === nodeId ? { ...n, position: { x, y } } : n)),
+      );
+    },
+    onNodeDeleted: (nodeId) => {
+      setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+      setEdges((prev) => prev.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    },
+    onEdgeCreated: (edge) => {
+      setEdges((prev) => {
+        if (prev.some((e) => e.id === edge.id)) return prev;
+        return [...prev, apiEdgeToRF(edge)];
+      });
+    },
+    onEdgeDeleted: (edgeId) => {
+      setEdges((prev) => prev.filter((e) => e.id !== edgeId));
+    },
+    onNodeCollapsed: (nodeId, isCollapsed) => {
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === nodeId ? { ...n, data: { ...n.data, is_collapsed: isCollapsed } } : n,
+        ),
+      );
+    },
+  });
+
   /* ── Connect handler ── */
   const onConnect = useCallback(
     (params: Connection) => {
-      setEdges((eds) =>
-        addEdge({ ...params, type: 'smart' }, eds),
-      );
+      setEdges((eds) => addEdge({ ...params, type: 'smart' }, eds));
+      // Persist edge to backend
+      if (
+        params.source &&
+        params.target &&
+        !params.source.startsWith('local-') &&
+        !params.target.startsWith('local-')
+      ) {
+        infCreateEdge(projectId, params.source, params.target).catch(() => { /* ignore */ });
+      }
     },
-    [setEdges],
+    [setEdges, projectId],
   );
 
   /* ── Add chat node (enters placement mode) ── */
@@ -681,6 +995,19 @@ function CanvasPageInner() {
   const handleRemoveFile = useCallback((id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   }, []);
+
+  /* ── Sync node position to backend after drag ── */
+  const onNodeDragStop = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      if (node.id.startsWith('local-')) return;
+      infUpdateNode(node.id, {
+        position_x: Math.round(node.position.x),
+        position_y: Math.round(node.position.y),
+      }).catch(() => { /* ignore */ });
+      sendNodeMoved(node.id, node.position.x, node.position.y);
+    },
+    [sendNodeMoved],
+  );
 
   /* ── Render ── */
   return (
@@ -730,23 +1057,23 @@ function CanvasPageInner() {
             onToggleSettings={() => setShowSettings((v) => !v)}
           />
 
-          {/* Collaborator avatars */}
-          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-            <div className="flex items-center -space-x-1">
-              {['JD', 'SK', 'AM'].map((initials, idx) => (
-                <div
-                  key={initials}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white border-2 border-white"
-                  style={{
-                    backgroundColor: ['#3B82F6', '#16A34A', '#F59E0B'][idx],
-                  }}
-                  title={`User ${initials}`}
-                >
-                  {initials}
-                </div>
-              ))}
+          {/* Collaborator presence avatars */}
+          {users.length > 0 && (
+            <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+              <div className="flex items-center -space-x-1">
+                {users.map((user) => (
+                  <div
+                    key={user.sessionId}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white border-2 border-white"
+                    style={{ backgroundColor: user.color }}
+                    title={user.name}
+                  >
+                    {user.name.slice(0, 2).toUpperCase()}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Settings panel */}
           {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
@@ -762,6 +1089,7 @@ function CanvasPageInner() {
             onInit={handleFlowInit}
             onPaneClick={onPaneClick}
             onNodeClick={handleNodeClick}
+            onNodeDragStop={onNodeDragStop}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             connectionRadius={80}
