@@ -4,6 +4,8 @@ import { ArrowRight, BarChart3, BookOpen, GraduationCap, ShieldCheck } from 'luc
 import { WaveDivider } from '@/components/svg/WaveDivider';
 import { SplitText } from '@/components/animations/SplitText';
 import { StreakingLines } from '@/components/animations/StreakingLines';
+import BlurText from '@/components/animations/BlurText';
+import { BlurFadeIn } from '@/components/animations/BlurFadeIn';
 
 
 export default function LandingPage() {
@@ -25,32 +27,46 @@ export default function LandingPage() {
           <h1 className="mb-0">
             <SplitText
               text="ConceptPilot"
-              className="text-6xl md:text-8xl lg:text-9xl font-extrabold text-white tracking-tight"
+              className="text-6xl md:text-8xl lg:text-9xl font-extrabold text-white tracking-tight font-[family-name:var(--font-sergio-trendy)]"
             />
           </h1>
           <div className="h-1.5 w-32 bg-accent rounded-full mx-auto mt-4 mb-6" />
-          <p className="text-lg md:text-xl text-white/70 max-w-2xl mx-auto mb-10">
-            Upload exam data, map concepts, and get explainable readiness analytics — for instructors and students alike.
-          </p>
+          <BlurText
+            text="Upload exam data, map concepts, and get explainable readiness analytics — for instructors and students alike."
+            className="text-lg md:text-xl text-white/70 max-w-2xl mx-auto mb-10"
+            animateBy="words"
+            direction="bottom"
+            delay={80}
+            stepDuration={0.4}
+            animationFrom={{ filter: 'blur(12px)', opacity: 0, y: 30 }}
+            animationTo={[
+              { filter: 'blur(5px)', opacity: 0.5, y: -3 },
+              { filter: 'blur(0px)', opacity: 1, y: 0 },
+            ]}
+          />
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/dashboard"
-              className="group inline-flex items-center gap-2.5 px-7 py-3 rounded-full bg-accent text-primary font-semibold text-base hover:shadow-lg hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:bg-accent/90 transition-all"
-            >
-              <ShieldCheck className="w-5 h-5" />
-              Instructors
-              <ArrowRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition-transform" />
-            </Link>
+            <BlurFadeIn delay={1.2} duration={0.6} direction="bottom" blur={10}>
+              <Link
+                href="/dashboard"
+                className="group inline-flex items-center gap-2.5 px-7 py-3 rounded-full bg-accent text-primary font-semibold text-base hover:shadow-lg hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:bg-accent/90 transition-all"
+              >
+                <ShieldCheck className="w-5 h-5" />
+                Instructors
+                <ArrowRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+            </BlurFadeIn>
 
-            <Link
-              href="/student"
-              className="group inline-flex items-center gap-2.5 px-7 py-3 rounded-full bg-transparent border-2 border-white text-white font-semibold text-base hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:bg-white/20 transition-all hover:scale-[1.02] hover:shadow-lg"
-            >
-              <GraduationCap className="w-5 h-5" />
-              Students
-              <ArrowRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition-transform" />
-            </Link>
+            <BlurFadeIn delay={1.5} duration={0.6} direction="bottom" blur={10}>
+              <Link
+                href="/student"
+                className="group inline-flex items-center gap-2.5 px-7 py-3 rounded-full bg-transparent border-2 border-white text-white font-semibold text-base hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:bg-white/20 transition-all hover:scale-[1.02] hover:shadow-lg"
+              >
+                <GraduationCap className="w-5 h-5" />
+                Students
+                <ArrowRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+            </BlurFadeIn>
           </div>
         </div>
 
