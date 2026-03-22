@@ -11,8 +11,8 @@ export default function StudentReportRedirect() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-[#FAFBFC] flex items-center justify-center">
-      <p className="text-sm text-[#94A3B8]">Redirecting to student report...</p>
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <p className="text-sm text-muted-foreground">Redirecting to student report...</p>
     </div>
   );
 }

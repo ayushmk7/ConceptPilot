@@ -91,16 +91,16 @@ export const ChatNode = memo(({ id, data }: any) => {
     return (
       <div
         onClick={() => setIsExpanded(true)}
-        className="px-4 py-2.5 bg-white rounded-full border border-[#E2E8F0] shadow-md cursor-pointer hover:border-[#00274C] transition-all min-w-[140px]"
+        className="px-4 py-2.5 bg-white rounded-full border border-border shadow-md cursor-pointer hover:border-primary transition-all min-w-[140px]"
       >
-        <Handle type="target" position={Position.Left} id="left" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-        <Handle type="source" position={Position.Right} id="right" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-        <Handle type="target" position={Position.Top} id="top" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-        <Handle type="source" position={Position.Bottom} id="bottom" className="!w-4 !h-4 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
+        <Handle type="target" position={Position.Left} id="left" className="!w-4 !h-4 !bg-primary !border-2 !border-white !rounded-full hover:!bg-chart-2" />
+        <Handle type="source" position={Position.Right} id="right" className="!w-4 !h-4 !bg-primary !border-2 !border-white !rounded-full hover:!bg-chart-2" />
+        <Handle type="target" position={Position.Top} id="top" className="!w-4 !h-4 !bg-primary !border-2 !border-white !rounded-full hover:!bg-chart-2" />
+        <Handle type="source" position={Position.Bottom} id="bottom" className="!w-4 !h-4 !bg-primary !border-2 !border-white !rounded-full hover:!bg-chart-2" />
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-[#FFCB05]" />
-          <span className="text-sm font-medium text-[#1A1A2E]">{data.title}</span>
-          <span className="text-xs text-[#94A3B8]">{messages.length}</span>
+          <div className="w-2 h-2 rounded-full bg-accent" />
+          <span className="text-sm font-medium text-foreground">{data.title}</span>
+          <span className="text-xs text-muted-foreground">{messages.length}</span>
         </div>
       </div>
     );
@@ -109,14 +109,14 @@ export const ChatNode = memo(({ id, data }: any) => {
   // ---- Expanded view ----
   return (
     <div
-      className="bg-white rounded-lg border border-[#E2E8F0] shadow-lg flex flex-col relative overflow-hidden"
+      className="bg-white rounded-lg border border-border shadow-lg flex flex-col relative overflow-hidden"
       style={{ width: '100%', height: '100%', minWidth: 320, minHeight: 360 }}
     >
       {/* Handles: left/right + top/bottom for dynamic routing */}
-      <Handle type="target" position={Position.Left} id="left" className="!w-6 !h-6 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-      <Handle type="source" position={Position.Right} id="right" className="!w-6 !h-6 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-      <Handle type="target" position={Position.Top} id="top" className="!w-6 !h-6 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
-      <Handle type="source" position={Position.Bottom} id="bottom" className="!w-6 !h-6 !bg-[#00274C] !border-2 !border-white !rounded-full hover:!bg-[#1B365D]" />
+      <Handle type="target" position={Position.Left} id="left" className="!w-6 !h-6 !bg-primary !border-2 !border-white !rounded-full hover:!bg-chart-2" />
+      <Handle type="source" position={Position.Right} id="right" className="!w-6 !h-6 !bg-primary !border-2 !border-white !rounded-full hover:!bg-chart-2" />
+      <Handle type="target" position={Position.Top} id="top" className="!w-6 !h-6 !bg-primary !border-2 !border-white !rounded-full hover:!bg-chart-2" />
+      <Handle type="source" position={Position.Bottom} id="bottom" className="!w-6 !h-6 !bg-primary !border-2 !border-white !rounded-full hover:!bg-chart-2" />
 
       {/* Resize handle — bottom-right corner */}
       <NodeResizeControl
@@ -132,11 +132,11 @@ export const ChatNode = memo(({ id, data }: any) => {
           height="14"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#94A3B8"
+          stroke="currentColor"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="absolute bottom-1 right-1 cursor-se-resize hover:stroke-[#00274C] transition-colors"
+          className="absolute bottom-1 right-1 cursor-se-resize text-muted-foreground hover:stroke-primary transition-colors"
         >
           <polyline points="16 20 20 20 20 16" />
           <line x1="14" y1="22" x2="22" y2="14" />
@@ -144,7 +144,7 @@ export const ChatNode = memo(({ id, data }: any) => {
       </NodeResizeControl>
 
       {/* ── Header ── */}
-      <div className="h-10 bg-[#00274C] rounded-t-lg px-4 flex items-center justify-between shrink-0">
+      <div className="h-10 bg-primary rounded-t-lg px-4 flex items-center justify-between shrink-0">
         <input
           type="text"
           defaultValue={data.title}
@@ -159,8 +159,8 @@ export const ChatNode = memo(({ id, data }: any) => {
               onClick={() => setShowBranchMenu((v) => !v)}
               className={`p-1 rounded transition-colors ${
                 branchMode !== 'off'
-                  ? 'bg-[#FFCB05] text-[#00274C]'
-                  : 'hover:bg-white/10 text-white'
+                  ? 'bg-accent text-primary'
+                  : 'hover:bg-card/10 text-white'
               }`}
               title="Branching options"
             >
@@ -170,7 +170,7 @@ export const ChatNode = memo(({ id, data }: any) => {
             {showBranchMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowBranchMenu(false)} />
-                <div className="absolute top-full mt-1 right-0 z-50 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-1 min-w-[200px]">
+                <div className="absolute top-full mt-1 right-0 z-50 bg-white rounded-lg shadow-lg border border-border py-1 min-w-[200px]">
                   <button
                     onClick={() => {
                       const next = !autoBranch;
@@ -178,16 +178,16 @@ export const ChatNode = memo(({ id, data }: any) => {
                       data.autoBranch = next;
                       setShowBranchMenu(false);
                     }}
-                    className="w-full text-left px-3 py-2 hover:bg-[#E8EEF4] transition-colors flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 hover:bg-muted transition-colors flex items-center gap-2"
                   >
-                    <Zap className={`w-4 h-4 ${autoBranch ? 'text-[#FFCB05]' : 'text-[#94A3B8]'}`} />
+                    <Zap className={`w-4 h-4 ${autoBranch ? 'text-accent' : 'text-muted-foreground'}`} />
                     <div>
-                      <div className="text-sm text-[#1A1A2E]">Auto Branch</div>
-                      <div className="text-xs text-[#94A3B8]">
+                      <div className="text-sm text-foreground">Auto Branch</div>
+                      <div className="text-xs text-muted-foreground">
                         {autoBranch ? 'ON — new node per response' : 'Create a node for each AI response'}
                       </div>
                     </div>
-                    {autoBranch && <Check className="w-4 h-4 text-[#16A34A] ml-auto" />}
+                    {autoBranch && <Check className="w-4 h-4 text-chart-4 ml-auto" />}
                   </button>
 
                   <button
@@ -196,16 +196,16 @@ export const ChatNode = memo(({ id, data }: any) => {
                       setSelectedIndices(new Set());
                       setShowBranchMenu(false);
                     }}
-                    className="w-full text-left px-3 py-2 hover:bg-[#E8EEF4] transition-colors flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 hover:bg-muted transition-colors flex items-center gap-2"
                   >
-                    <Hand className={`w-4 h-4 ${branchMode === 'manual' ? 'text-[#00274C]' : 'text-[#94A3B8]'}`} />
+                    <Hand className={`w-4 h-4 ${branchMode === 'manual' ? 'text-primary' : 'text-muted-foreground'}`} />
                     <div>
-                      <div className="text-sm text-[#1A1A2E]">Manual Branch</div>
-                      <div className="text-xs text-[#94A3B8]">
+                      <div className="text-sm text-foreground">Manual Branch</div>
+                      <div className="text-xs text-muted-foreground">
                         Select specific messages to branch
                       </div>
                     </div>
-                    {branchMode === 'manual' && <Check className="w-4 h-4 text-[#16A34A] ml-auto" />}
+                    {branchMode === 'manual' && <Check className="w-4 h-4 text-chart-4 ml-auto" />}
                   </button>
                 </div>
               </>
@@ -214,11 +214,11 @@ export const ChatNode = memo(({ id, data }: any) => {
 
           <button
             onClick={() => setIsExpanded(false)}
-            className="p-1 hover:bg-white/10 rounded transition-colors"
+            className="p-1 hover:bg-card/10 rounded transition-colors"
           >
             <Minimize2 className="w-3.5 h-3.5 text-white" />
           </button>
-          <button className="p-1 hover:bg-white/10 rounded transition-colors">
+          <button className="p-1 hover:bg-card/10 rounded transition-colors">
             <MoreVertical className="w-3.5 h-3.5 text-white" />
           </button>
         </div>
@@ -237,16 +237,16 @@ export const ChatNode = memo(({ id, data }: any) => {
 
       {/* ── Manual branch bar ── */}
       {branchMode === 'manual' && (
-        <div className="px-3 py-2 bg-[#EEF2FF] border-b border-[#C7D2FE] flex items-center gap-2 text-xs shrink-0">
-          <Hand className="w-3.5 h-3.5 text-[#4338CA]" />
-          <span className="text-[#4338CA] font-medium">
+        <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-200 flex items-center gap-2 text-xs shrink-0">
+          <Hand className="w-3.5 h-3.5 text-indigo-700" />
+          <span className="text-indigo-700 font-medium">
             Select messages to branch ({selectedIndices.size} selected)
           </span>
           <div className="ml-auto flex items-center gap-1">
             <button
               onClick={handleManualBranch}
               disabled={selectedIndices.size === 0}
-              className="px-2 py-1 bg-[#00274C] text-white rounded text-xs font-medium disabled:opacity-40 hover:bg-[#1B365D] transition-colors"
+              className="px-2 py-1 bg-primary text-white rounded text-xs font-medium disabled:opacity-40 hover:bg-chart-2 transition-colors"
             >
               Create Branch
             </button>
@@ -255,9 +255,9 @@ export const ChatNode = memo(({ id, data }: any) => {
                 setBranchMode('off');
                 setSelectedIndices(new Set());
               }}
-              className="p-1 hover:bg-[#C7D2FE] rounded transition-colors"
+              className="p-1 hover:bg-indigo-200 rounded transition-colors"
             >
-              <X className="w-3.5 h-3.5 text-[#4338CA]" />
+              <X className="w-3.5 h-3.5 text-indigo-700" />
             </button>
           </div>
         </div>
@@ -275,9 +275,9 @@ export const ChatNode = memo(({ id, data }: any) => {
 
       {/* ── Progress bar ── */}
       <div className="px-3 pt-2 shrink-0">
-        <div className="h-1 bg-[#E2E8F0] rounded-full">
+        <div className="h-1 bg-border rounded-full">
           <div
-            className="h-full bg-[#16A34A] rounded-full transition-all"
+            className="h-full bg-chart-4 rounded-full transition-all"
             style={{ width: `${Math.min(100, messages.length * 10)}%` }}
           />
         </div>

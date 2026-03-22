@@ -270,6 +270,36 @@ async def list_exports(
     )
 
 
+@router.get("/{exam_id}/export/{export_id}", response_model=ExportStatusResponse)
+async def get_export(
+    exam_id: UUID,
+    export_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: str = Depends(get_current_instructor),
+):
+    """Get status of a single export run."""
+    result = await db.execute(
+        select(ExportRun).where(
+            ExportRun.id == export_id,
+            ExportRun.exam_id == exam_id,
+        )
+    )
+    export_run = result.scalar_one_or_none()
+    if not export_run:
+        raise HTTPException(status_code=404, detail="Export not found")
+
+    return ExportStatusResponse(
+        id=export_run.id,
+        exam_id=export_run.exam_id,
+        status=export_run.status,
+        file_checksum=export_run.file_checksum,
+        manifest=export_run.manifest_json,
+        created_at=export_run.created_at,
+        completed_at=export_run.completed_at,
+        error_message=export_run.error_message,
+    )
+
+
 @router.get("/{exam_id}/export/{export_id}/download")
 async def download_export(
     exam_id: UUID,

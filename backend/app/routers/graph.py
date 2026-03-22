@@ -18,6 +18,8 @@ from app.schemas.schemas import (
     GraphRetrieveEdge,
     GraphRetrieveNode,
     GraphRetrieveResponse,
+    GraphVersionItem,
+    GraphVersionListResponse,
 )
 from app.services.ai_service import suggest_subtopic_expansion
 from app.services.graph_service import apply_patch, build_graph
@@ -219,3 +221,35 @@ async def patch_graph(
     await db.flush()
 
     return GraphPatchResponse(status="success", is_dag=True)
+
+
+@router.get("/{exam_id}/graph/versions", response_model=GraphVersionListResponse)
+async def list_graph_versions(
+    exam_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: str = Depends(get_current_instructor),
+):
+    """List all graph versions for an exam, newest first."""
+    result = await db.execute(select(Exam).where(Exam.id == exam_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    g_result = await db.execute(
+        select(ConceptGraph)
+        .where(ConceptGraph.exam_id == exam_id)
+        .order_by(ConceptGraph.version.desc())
+    )
+    rows = g_result.scalars().all()
+
+    return GraphVersionListResponse(
+        versions=[
+            GraphVersionItem(
+                version=g.version,
+                node_count=len(g.graph_json.get("nodes", [])),
+                edge_count=len(g.graph_json.get("edges", [])),
+                annotation=g.annotation,
+                created_at=g.created_at,
+            )
+            for g in rows
+        ]
+    )

@@ -7,7 +7,6 @@ import {
   Background,
   Controls,
   MiniMap,
-  MarkerType,
   addEdge,
   useNodesState,
   useEdgesState,
@@ -30,35 +29,16 @@ import { ViewToggle } from '@/components/canvas/views/ViewToggle';
 import { useCanvasEntrance } from '@/components/canvas/hooks/useCanvasEntrance';
 import '@/components/canvas/animations/canvas-entrance.css';
 import {
-  loadCanvasProject,
-  saveCanvasProject,
-  type CanvasProject,
+  getCanvasWorkspace,
+  updateCanvasWorkspace,
+  type CanvasWorkspaceState,
 } from '@/lib/canvas-api';
+import { DEFAULT_CANVAS_EDGES, DEFAULT_CANVAS_NODES } from '@/lib/canvas-defaults';
+import { themeColor } from '@/lib/theme-colors';
 import { useStreamingChat, type LocalMessage } from '@/components/canvas/hooks/useStreamingChat';
 
-/* ------------------------------------------------------------------ */
-/*  Defaults                                                           */
-/* ------------------------------------------------------------------ */
-
-const defaultNodes: Node[] = [
-  {
-    id: '1',
-    type: 'chat',
-    position: { x: 250, y: 100 },
-    style: { width: 420, height: 520 },
-    data: { title: 'Study Session', skill: 'Tutor', messages: [] },
-  },
-  {
-    id: '2',
-    type: 'document',
-    position: { x: 700, y: 150 },
-    data: { title: 'Lecture Notes.pdf', pages: 24 },
-  },
-];
-
-const defaultEdges: Edge[] = [
-  { id: 'e2-1', source: '2', target: '1', type: 'smart', animated: true },
-];
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Node types that feed INTO chat nodes (flow: resource → chat). */
 const RESOURCE_TYPES = new Set(['document', 'image', 'artifact']);
@@ -72,12 +52,13 @@ export default function CanvasPage() {
   const router = useRouter();
   const projectId = params.projectId;
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(defaultEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(DEFAULT_CANVAS_NODES);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(DEFAULT_CANVAS_EDGES);
   const [workspaceName, setWorkspaceName] = useState('Untitled Workspace');
   const [showSettings, setShowSettings] = useState(false);
   const [viewMode, setViewMode] = useState<'canvas' | 'linear'>('canvas');
   const { entranceClass, onInit: onCanvasInit } = useCanvasEntrance();
+  const saveAllowedRef = useRef(false);
 
   /* ── Active chat node for linear view ── */
   const activeChatNode = useMemo(
@@ -150,7 +131,7 @@ export default function CanvasPage() {
               target: newId,
               type: 'smart',
               animated: true,
-              style: { stroke: '#7C3AED', strokeWidth: 2 },
+              style: { stroke: themeColor.violet600, strokeWidth: 2 },
             },
           ]);
         }, 0);
@@ -179,73 +160,106 @@ export default function CanvasPage() {
     );
   }, [setNodes, stableBranchCreate]);
 
-  /* ── Load project from localStorage on mount ── */
+  /* ── Load workspace from API ── */
   useEffect(() => {
-    const saved = loadCanvasProject(projectId);
-    if (saved) {
-      setWorkspaceName(saved.name);
-      if (saved.nodes.length > 0) {
-        const startX = typeof window !== 'undefined' ? window.innerWidth / 2 - 200 : 500;
-        const startY = typeof window !== 'undefined' ? window.innerHeight / 2 - 200 : 300;
+    if (!projectId) return;
+    if (!UUID_RE.test(projectId)) {
+      router.replace('/canvas');
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const row = await getCanvasWorkspace(projectId);
+        if (cancelled) return;
+        setWorkspaceName(row.title);
+        const saved = row.state as CanvasWorkspaceState;
+        const hasNodes = saved?.nodes && saved.nodes.length > 0;
+        if (hasNodes) {
+          const startX = typeof window !== 'undefined' ? window.innerWidth / 2 - 200 : 500;
+          const startY = typeof window !== 'undefined' ? window.innerHeight / 2 - 200 : 300;
 
-        const loadedNodes = (saved.nodes as Node[]).map((n) => {
-          const finalPos = n.position;
-          const nodeObj = {
-            ...n,
-            position: { x: startX, y: startY },
-          };
-          if (n.type === 'chat') {
+          const loadedNodes = (saved.nodes as Node[]).map((n) => {
+            const finalPos = n.position;
+            const nodeObj = {
+              ...n,
+              position: { x: startX, y: startY },
+            };
+            if (n.type === 'chat') {
+              return {
+                ...nodeObj,
+                data: { ...n.data, onBranchCreate: stableBranchCreate, _finalPosition: finalPos },
+              };
+            }
             return {
               ...nodeObj,
-              data: { ...n.data, onBranchCreate: stableBranchCreate, _finalPosition: finalPos },
+              data: { ...n.data, _finalPosition: finalPos },
             };
-          }
-          return {
-            ...nodeObj,
-            data: { ...n.data, _finalPosition: finalPos }
-          };
-        });
-        setNodes(loadedNodes);
+          });
+          setNodes(loadedNodes);
 
-        // Spread them out to their actual saved positions to trigger the transform transition
-        setTimeout(() => {
-          setNodes((nds) => nds.map(n => ({
-            ...n,
-            position: (n.data as any)._finalPosition || n.position
-          })));
-        }, 50);
+          setTimeout(() => {
+            setNodes((nds) =>
+              nds.map((n) => ({
+                ...n,
+                position: (n.data as { _finalPosition?: { x: number; y: number } })._finalPosition ?? n.position,
+              })),
+            );
+          }, 50);
 
-        setEdges(
-          saved.edges.map((e) => ({
-            ...e,
-            type: e.type || 'smart',
-            animated: true,
-            style: { stroke: '#CBD5E1', strokeWidth: 2 },
-          })) as Edge[],
-        );
+          setEdges(
+            (saved.edges ?? []).map((e) => ({
+              ...e,
+              type: e.type || 'smart',
+              animated: true,
+              style: { stroke: themeColor.input, strokeWidth: 2, ...e.style },
+            })) as Edge[],
+          );
+        } else {
+          setNodes(
+            DEFAULT_CANVAS_NODES.map((n) =>
+              n.type === 'chat'
+                ? { ...n, data: { ...n.data, onBranchCreate: stableBranchCreate } }
+                : n,
+            ),
+          );
+          setEdges(DEFAULT_CANVAS_EDGES);
+        }
+        if (saved?.viewMode === 'linear' || saved?.viewMode === 'canvas') {
+          setViewMode(saved.viewMode);
+        }
+        saveAllowedRef.current = true;
+      } catch {
+        router.replace('/canvas');
       }
-    }
-  }, [projectId, setNodes, setEdges, stableBranchCreate]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, router, setNodes, setEdges, stableBranchCreate]);
 
   /* ── Auto-save on changes (debounced) ── */
   useEffect(() => {
+    if (!saveAllowedRef.current || !projectId || !UUID_RE.test(projectId)) return;
     const timer = setTimeout(() => {
-      const project: CanvasProject = {
-        id: projectId,
-        name: workspaceName,
+      const state: CanvasWorkspaceState = {
+        viewMode,
         nodes: nodes.map((n) => ({
           id: n.id,
           type: n.type ?? 'chat',
           position: n.position,
+          style: n.style as Record<string, unknown> | undefined,
           data: {
-            title: (n.data as any)?.title,
-            skill: (n.data as any)?.skill,
-            pages: (n.data as any)?.pages,
-            src: (n.data as any)?.src,
-            alt: (n.data as any)?.alt,
-            content: (n.data as any)?.content,
-            language: (n.data as any)?.language,
-            autoBranch: (n.data as any)?.autoBranch,
+            title: (n.data as Record<string, unknown>)?.title,
+            skill: (n.data as Record<string, unknown>)?.skill,
+            pages: (n.data as Record<string, unknown>)?.pages,
+            src: (n.data as Record<string, unknown>)?.src,
+            alt: (n.data as Record<string, unknown>)?.alt,
+            content: (n.data as Record<string, unknown>)?.content,
+            language: (n.data as Record<string, unknown>)?.language,
+            autoBranch: (n.data as Record<string, unknown>)?.autoBranch,
+            messages: (n.data as Record<string, unknown>)?.messages,
+            initialMessages: (n.data as Record<string, unknown>)?.initialMessages,
           },
         })),
         edges: edges.map((e) => ({
@@ -253,26 +267,14 @@ export default function CanvasPage() {
           source: e.source,
           target: e.target,
           type: e.type,
+          animated: e.animated,
+          style: e.style as Record<string, unknown> | undefined,
         })),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       };
-      saveCanvasProject(project);
-
-      // Update the project index
-      const rawIndex = localStorage.getItem('canvas_projects_index');
-      if (rawIndex) {
-        const index = JSON.parse(rawIndex) as { id: string; name: string; updatedAt: string }[];
-        const existing = index.find((p) => p.id === projectId);
-        if (existing) {
-          existing.name = workspaceName;
-          existing.updatedAt = new Date().toISOString();
-          localStorage.setItem('canvas_projects_index', JSON.stringify(index));
-        }
-      }
+      void updateCanvasWorkspace(projectId, { title: workspaceName, state });
     }, 500);
     return () => clearTimeout(timer);
-  }, [nodes, edges, workspaceName, projectId]);
+  }, [nodes, edges, workspaceName, viewMode, projectId]);
 
   /* ── Connect handler ──
    * Auto-swaps direction so the animated flow always goes
@@ -335,13 +337,13 @@ export default function CanvasPage() {
 
   /* ── Render ── */
   return (
-    <div className="h-full w-full bg-[#FAFBFC] relative">
+    <div className="h-full w-full bg-background relative">
       {/* Back button */}
       <button
         onClick={() => router.push('/canvas')}
-        className="absolute top-4 left-4 z-10 p-2 bg-white rounded-lg shadow-md border border-[#E2E8F0] hover:bg-[#F1F5F9] transition-colors"
+        className="absolute top-4 left-4 z-10 p-2 bg-white rounded-lg shadow-md border border-border hover:bg-muted transition-colors"
       >
-        <ArrowLeft className="w-4 h-4 text-[#00274C]" />
+        <ArrowLeft className="w-4 h-4 text-primary" />
       </button>
 
       {/* View toggle FAB */}
@@ -366,24 +368,6 @@ export default function CanvasPage() {
             onToggleSettings={() => setShowSettings((v) => !v)}
           />
 
-          {/* Collaborator avatars */}
-          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-            <div className="flex items-center -space-x-1">
-              {['JD', 'SK', 'AM'].map((initials, idx) => (
-                <div
-                  key={initials}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white border-2 border-white"
-                  style={{
-                    backgroundColor: ['#3B82F6', '#16A34A', '#F59E0B'][idx],
-                  }}
-                  title={`User ${initials}`}
-                >
-                  {initials}
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Settings panel */}
           {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
 
@@ -403,22 +387,22 @@ export default function CanvasPage() {
             defaultEdgeOptions={{
               type: 'smart',
               animated: true,
-              style: { stroke: '#CBD5E1', strokeWidth: 2 },
+              style: { stroke: themeColor.input, strokeWidth: 2 },
             }}
           >
             <Background
               gap={20}
               size={1}
-              color="#E2E8F0"
-              style={{ backgroundColor: '#FAFBFC' }}
+              color={themeColor.border}
+              style={{ backgroundColor: themeColor.background }}
             />
             <Controls
-              className="bg-white rounded-lg shadow-lg border border-[#E2E8F0]"
+              className="bg-white rounded-lg shadow-lg border border-border"
               showInteractive={false}
             />
             <MiniMap
-              className="bg-white rounded-lg shadow-lg border border-[#E2E8F0]"
-              nodeColor="#00274C"
+              className="bg-white rounded-lg shadow-lg border border-border"
+              nodeColor={themeColor.primary}
               maskColor="rgba(0, 0, 0, 0.1)"
             />
           </ReactFlow>

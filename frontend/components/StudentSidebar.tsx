@@ -22,9 +22,9 @@ export function StudentSidebar() {
     item.exact ? pathname === item.path : pathname.startsWith(item.path);
 
   return (
-    <div className={`hidden md:flex bg-gradient-to-b from-[#F8FAFC] to-[#F1F5F9] border-r border-[#E2E8F0] transition-all duration-300 flex-col ${isCollapsed ? 'w-14' : 'w-60'}`}>
+    <div className={`hidden md:flex bg-gradient-to-b from-sidebar to-sidebar border-r border-border transition-all duration-300 flex-col ${isCollapsed ? 'w-14' : 'w-60'}`}>
       <div className="flex-1 py-6">
-        <div className={`text-[10px] font-semibold text-[#94A3B8] tracking-widest px-4 mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
+        <div className={`text-[10px] font-semibold text-muted-foreground tracking-widest px-4 mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
           NAVIGATION
         </div>
 
@@ -38,12 +38,12 @@ export function StudentSidebar() {
                 href={item.href ?? item.path}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                   active
-                    ? 'bg-[#EFF6FF] text-[#1B365D] shadow-sm border border-[#3B82F6]/20'
-                    : 'text-[#4A5568] hover:bg-white hover:shadow-sm border border-transparent'
+                    ? 'bg-muted text-chart-2 shadow-sm border border-chart-5/20'
+                    : 'text-secondary-text hover:bg-card hover:shadow-sm border border-transparent'
                 }`}
                 title={isCollapsed ? item.label : ''}
               >
-                <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-[#3B82F6]' : 'text-[#94A3B8]'}`} />
+                <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-chart-5' : 'text-muted-foreground'}`} />
                 {!isCollapsed && <span className="text-sm font-medium">{item.label}</span>}
               </Link>
             );
@@ -52,9 +52,9 @@ export function StudentSidebar() {
 
         {/* Info box */}
         {!isCollapsed && (
-          <div className="mx-4 mt-8 p-4 bg-[#EFF6FF] rounded-xl border border-[#3B82F6]/10">
-            <p className="text-xs font-medium text-[#1B365D] mb-1">Your readiness report</p>
-            <p className="text-[11px] text-[#4A5568] leading-relaxed">
+          <div className="mx-4 mt-8 p-4 bg-muted rounded-xl border border-chart-5/10">
+            <p className="text-xs font-medium text-chart-2 mb-1">Your readiness report</p>
+            <p className="text-[11px] text-secondary-text leading-relaxed">
               This report is private to you. No peer comparisons or rankings are shown.
             </p>
           </div>
@@ -79,12 +79,12 @@ export function StudentSidebar() {
 
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="p-3.5 border-t border-[#E2E8F0] hover:bg-[#E8EEF4] transition-colors flex items-center justify-center"
+        className="p-3.5 border-t border-border hover:bg-muted transition-colors flex items-center justify-center"
       >
         {isCollapsed ? (
-          <ChevronRight className="w-5 h-5 text-[#94A3B8]" />
+          <ChevronRight className="w-5 h-5 text-muted-foreground" />
         ) : (
-          <ChevronLeft className="w-5 h-5 text-[#94A3B8]" />
+          <ChevronLeft className="w-5 h-5 text-muted-foreground" />
         )}
       </button>
     </div>

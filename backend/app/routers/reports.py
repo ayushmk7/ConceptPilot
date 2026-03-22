@@ -25,6 +25,7 @@ router = APIRouter(tags=["Reports"])
 
 
 @router.get("/api/v1/exams/{exam_id}/reports/tokens", response_model=StudentTokenListResponse)
+@router.post("/api/v1/exams/{exam_id}/reports/tokens", response_model=StudentTokenListResponse)
 async def list_report_tokens(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),

@@ -25,14 +25,14 @@ export function StudentTopNav() {
     link.exact ? pathname === link.path : pathname.startsWith(link.path);
 
   return (
-    <nav className="h-14 bg-gradient-to-r from-[#0a3260] to-[#1B365D] text-white flex items-center px-6 sticky top-0 z-50 shadow-md">
+    <nav className="h-14 bg-gradient-to-r from-chart-2 to-chart-2 text-white flex items-center px-6 sticky top-0 z-50 shadow-md">
       <Link href="/" className="flex items-center gap-2.5 text-lg font-semibold tracking-tight mr-10">
         <ConceptGraphIcon size={22} className="text-white" />
         PreReq
       </Link>
 
       <div className="hidden sm:flex items-center mr-4">
-        <span className="text-[10px] font-semibold text-[#3B82F6] tracking-wider bg-[#3B82F6]/15 px-2 py-0.5 rounded">
+        <span className="text-[10px] font-semibold text-chart-5 tracking-wider bg-chart-5/15 px-2 py-0.5 rounded">
           STUDENT
         </span>
       </div>
@@ -48,7 +48,7 @@ export function StudentTopNav() {
           >
             {link.label}
             {isActive(link) && (
-              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#3B82F6] rounded-full" />
+              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-chart-5 rounded-full" />
             )}
           </Link>
         ))}
@@ -59,21 +59,21 @@ export function StudentTopNav() {
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="w-8 h-8 rounded-full bg-[#3B82F6] flex items-center justify-center text-white hover:ring-2 hover:ring-white/30 transition-all"
+            className="w-8 h-8 rounded-full bg-chart-5 flex items-center justify-center text-white hover:ring-2 hover:ring-white/30 transition-all"
           >
             <GraduationCap className="w-4 h-4" />
           </button>
           {showUserMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-              <div className="absolute right-0 top-10 z-50 bg-white rounded-xl shadow-xl border border-[#E2E8F0] w-56 py-2 animate-fade-in">
-                <div className="px-4 py-2 border-b border-[#E2E8F0]">
-                  <div className="text-sm font-medium text-[#1A1A2E]">{user?.name || 'Alex Johnson'}</div>
-                  <div className="text-xs text-[#94A3B8]">{user?.email || 'ajohnson@umich.edu'}</div>
+              <div className="absolute right-0 top-10 z-50 bg-white rounded-xl shadow-xl border border-border w-56 py-2 animate-fade-in">
+                <div className="px-4 py-2 border-b border-border">
+                  <div className="text-sm font-medium text-foreground">{user?.name || 'Alex Johnson'}</div>
+                  <div className="text-xs text-muted-foreground">{user?.email || 'ajohnson@umich.edu'}</div>
                 </div>
                 <button
                   onClick={() => { logout(); setShowUserMenu(false); }}
-                  className="w-full text-left px-4 py-2 text-sm text-[#DC2626] hover:bg-[#FEF2F2] flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-destructive/10 flex items-center gap-2"
                 >
                   <LogOut className="w-4 h-4" />
                   Sign Out

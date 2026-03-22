@@ -1,12 +1,78 @@
 /**
- * Canvas-specific typed API calls.
- *
- * Uses the existing /chat backend endpoints for messaging.
- * Canvas project CRUD endpoints are stubbed — the backend doesn't have
- * a dedicated canvas router yet, so we fall back to local state.
+ * Canvas workspace persistence (API) + chat session helpers for the canvas UI.
  */
 
 import { apiFetch } from './api';
+
+/* ------------------------------------------------------------------ */
+/*  Workspace API (backend)                                          */
+/* ------------------------------------------------------------------ */
+
+export interface CanvasWorkspaceApi {
+  id: string;
+  title: string;
+  state: CanvasWorkspaceState;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Persisted inside `state` JSONB (nodes/edges as plain JSON). */
+export interface CanvasWorkspaceState {
+  nodes?: SerializedNode[];
+  edges?: SerializedEdge[];
+  viewMode?: 'canvas' | 'linear';
+}
+
+export interface SerializedNode {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  style?: Record<string, unknown>;
+  data: Record<string, unknown>;
+}
+
+export interface SerializedEdge {
+  id: string;
+  source: string;
+  target: string;
+  type?: string;
+  animated?: boolean;
+  style?: Record<string, unknown>;
+}
+
+export async function listCanvasWorkspaces(): Promise<CanvasWorkspaceApi[]> {
+  return apiFetch<CanvasWorkspaceApi[]>('/api/v1/canvas-workspaces');
+}
+
+export async function createCanvasWorkspace(title?: string): Promise<CanvasWorkspaceApi> {
+  return apiFetch<CanvasWorkspaceApi>('/api/v1/canvas-workspaces', {
+    method: 'POST',
+    jsonBody: {
+      title: title?.trim() || 'Untitled Workspace',
+      state: {},
+    },
+  });
+}
+
+export async function getCanvasWorkspace(id: string): Promise<CanvasWorkspaceApi> {
+  return apiFetch<CanvasWorkspaceApi>(`/api/v1/canvas-workspaces/${encodeURIComponent(id)}`);
+}
+
+export async function updateCanvasWorkspace(
+  id: string,
+  body: { title?: string; state?: CanvasWorkspaceState },
+): Promise<CanvasWorkspaceApi> {
+  return apiFetch<CanvasWorkspaceApi>(`/api/v1/canvas-workspaces/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    jsonBody: body,
+  });
+}
+
+export async function deleteCanvasWorkspace(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/canvas-workspaces/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
 
 /* ------------------------------------------------------------------ */
 /*  Chat types (match backend schemas)                                 */
@@ -56,51 +122,4 @@ export function sendMessage(sessionId: string, message: string, examId?: string)
     method: 'POST',
     body: JSON.stringify({ message, exam_id: examId ?? null }),
   });
-}
-
-/* ------------------------------------------------------------------ */
-/*  Canvas project stubs                                               */
-/*  TODO: Replace with real endpoints once backend canvas router exists */
-/* ------------------------------------------------------------------ */
-
-export interface CanvasProject {
-  id: string;
-  name: string;
-  nodes: SerializedNode[];
-  edges: SerializedEdge[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SerializedNode {
-  id: string;
-  type: string;
-  position: { x: number; y: number };
-  data: Record<string, unknown>;
-}
-
-export interface SerializedEdge {
-  id: string;
-  source: string;
-  target: string;
-  type?: string;
-}
-
-/**
- * Stub: loads canvas project from localStorage.
- * Replace with `GET /api/canvas/projects/:id` when available.
- */
-export function loadCanvasProject(projectId: string): CanvasProject | null {
-  if (typeof window === 'undefined') return null;
-  const raw = localStorage.getItem(`canvas_project_${projectId}`);
-  return raw ? (JSON.parse(raw) as CanvasProject) : null;
-}
-
-/**
- * Stub: saves canvas project to localStorage.
- * Replace with `PUT /api/canvas/projects/:id` when available.
- */
-export function saveCanvasProject(project: CanvasProject): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(`canvas_project_${project.id}`, JSON.stringify(project));
 }

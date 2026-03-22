@@ -25,7 +25,7 @@ export function SkillPicker({ currentSkill, onSelect }: SkillPickerProps) {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 px-2 py-0.5 bg-[#FFCB05] text-[#00274C] rounded text-xs font-medium hover:bg-[#FFCB05]/80 transition-colors"
+        className="flex items-center gap-1 px-2 py-0.5 bg-accent text-primary rounded text-xs font-medium hover:bg-accent/80 transition-colors"
       >
         {active.label}
         <ChevronDown className="w-3 h-3" />
@@ -34,7 +34,7 @@ export function SkillPicker({ currentSkill, onSelect }: SkillPickerProps) {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-full mt-1 right-0 z-50 bg-white rounded-lg shadow-lg border border-[#E2E8F0] py-1 min-w-[200px]">
+          <div className="absolute top-full mt-1 right-0 z-50 bg-white rounded-lg shadow-lg border border-border py-1 min-w-[200px]">
             {SKILLS.map((skill) => (
               <button
                 key={skill.id}
@@ -42,12 +42,12 @@ export function SkillPicker({ currentSkill, onSelect }: SkillPickerProps) {
                   onSelect(skill.id);
                   setIsOpen(false);
                 }}
-                className={`w-full text-left px-3 py-2 hover:bg-[#E8EEF4] transition-colors ${
-                  skill.id === active.id ? 'bg-[#F1F5F9]' : ''
+                className={`w-full text-left px-3 py-2 hover:bg-muted transition-colors ${
+                  skill.id === active.id ? 'bg-muted' : ''
                 }`}
               >
-                <div className="text-sm font-medium text-[#1A1A2E]">{skill.label}</div>
-                <div className="text-xs text-[#94A3B8]">{skill.description}</div>
+                <div className="text-sm font-medium text-foreground">{skill.label}</div>
+                <div className="text-xs text-muted-foreground">{skill.description}</div>
               </button>
             ))}
           </div>

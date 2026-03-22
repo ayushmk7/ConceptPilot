@@ -1,49 +1,39 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { TopNav } from '@/components/TopNav';
 import { Sidebar } from '@/components/Sidebar';
-import { StudentTopNav } from '@/components/StudentTopNav';
-import { StudentSidebar } from '@/components/StudentSidebar';
-
-type CanvasRole = 'instructor' | 'student';
-const CANVAS_ROLE_KEY = 'canvas_role_preference';
+import { useAuth } from '@/lib/auth-context';
 
 export default function CanvasLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<div className="h-screen bg-[#FAFBFC]" />}>
-      <CanvasRoleLayout>{children}</CanvasRoleLayout>
+    <Suspense fallback={<div className="h-screen bg-background" />}>
+      <CanvasAuthGate>{children}</CanvasAuthGate>
     </Suspense>
   );
 }
 
-function CanvasRoleLayout({ children }: { children: React.ReactNode }) {
-  const searchParams = useSearchParams();
-  const [role, setRole] = useState<CanvasRole>('instructor');
-  const queryRole = searchParams.get('role');
+function CanvasAuthGate({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
-    if (queryRole === 'student' || queryRole === 'instructor') {
-      setRole(queryRole);
-      localStorage.setItem(CANVAS_ROLE_KEY, queryRole);
-      return;
+    if (isLoading) return;
+    if (!isAuthenticated || user?.role !== 'instructor') {
+      router.replace('/login');
     }
+  }, [isLoading, isAuthenticated, user, router]);
 
-    const storedRole = localStorage.getItem(CANVAS_ROLE_KEY);
-    if (storedRole === 'student' || storedRole === 'instructor') {
-      setRole(storedRole);
-    }
-  }, [queryRole]);
-
-  const isStudent = queryRole === 'student' || (queryRole !== 'instructor' && role === 'student');
+  if (isLoading || !isAuthenticated || user?.role !== 'instructor') {
+    return <div className="h-screen bg-background" />;
+  }
 
   return (
-    <div className="h-screen bg-[#FAFBFC] flex flex-col">
-      {isStudent ? <StudentTopNav /> : <TopNav />}
+    <div className="h-screen bg-background flex flex-col">
+      <TopNav />
       <div className="flex flex-1 min-h-0">
-        {isStudent ? <StudentSidebar /> : <Sidebar />}
+        <Sidebar />
         <main className="flex-1 min-w-0 min-h-0 overflow-hidden">{children}</main>
       </div>
     </div>

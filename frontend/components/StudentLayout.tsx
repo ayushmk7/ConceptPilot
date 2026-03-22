@@ -6,7 +6,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 
 export function StudentLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#FAFBFC] flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       <StudentTopNav />
       <div className="flex flex-1">
         <StudentSidebar />

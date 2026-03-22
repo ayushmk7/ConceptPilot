@@ -39,8 +39,8 @@ export function MessageBubble({
           onClick={() => onToggleSelect(index)}
           className={`self-start mt-1 mr-1.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
             isSelected
-              ? 'bg-[#00274C] border-[#00274C] text-white'
-              : 'border-[#CBD5E1] hover:border-[#00274C]'
+              ? 'bg-primary border-primary text-white'
+              : 'border-input hover:border-primary'
           }`}
         >
           {isSelected && <Check className="w-3 h-3" />}
@@ -50,9 +50,9 @@ export function MessageBubble({
       <div
         className={`max-w-[85%] px-3 py-2 rounded-lg text-sm relative ${
           isUser
-            ? 'bg-[#FFF8E1] text-[#1A1A2E]'
-            : 'bg-white border border-[#E2E8F0] text-[#1A1A2E]'
-        } ${isSelected ? 'ring-2 ring-[#00274C] ring-offset-1' : ''}`}
+            ? 'bg-sidebar-accent text-foreground'
+            : 'bg-white border border-border text-foreground'
+        } ${isSelected ? 'ring-2 ring-primary ring-offset-1' : ''}`}
       >
         {isUser ? (
           <p className="whitespace-pre-wrap">{content}</p>
@@ -76,7 +76,7 @@ export function MessageBubble({
                     );
                   }
                   return (
-                    <code className="bg-[#F1F5F9] px-1 py-0.5 rounded text-xs" {...props}>
+                    <code className="bg-muted px-1 py-0.5 rounded text-xs" {...props}>
                       {children}
                     </code>
                   );
@@ -92,12 +92,12 @@ export function MessageBubble({
         {hovered && branchMode === 'off' && onBranchFromHere && (
           <button
             onClick={() => onBranchFromHere(index)}
-            className={`absolute top-1 p-1 bg-white border border-[#E2E8F0] rounded-md shadow-sm hover:bg-[#E8EEF4] transition-colors ${
+            className={`absolute top-1 p-1 bg-white border border-border rounded-md shadow-sm hover:bg-muted transition-colors ${
               isUser ? '-left-8' : '-right-8'
             }`}
             title="Branch from this message"
           >
-            <GitBranch className="w-3.5 h-3.5 text-[#00274C]" />
+            <GitBranch className="w-3.5 h-3.5 text-primary" />
           </button>
         )}
       </div>

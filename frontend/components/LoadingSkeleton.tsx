@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 export function Skeleton({ className = '' }: { className?: string }) {
   return (
     <div
-      className={`rounded-md bg-gradient-to-r from-[#E2E8F0] via-[#F1F5F9] to-[#E2E8F0] bg-[length:200%_100%] animate-[shimmer_1.5s_ease-in-out_infinite] ${className}`}
+      className={`rounded-md bg-gradient-to-r from-border via-muted to-border bg-[length:200%_100%] animate-[shimmer_1.5s_ease-in-out_infinite] ${className}`}
     />
   );
 }
@@ -16,10 +16,10 @@ export function PageLoader({ message = 'Loading...' }: { message?: string }) {
   return (
     <div className="min-h-[400px] flex items-center justify-center">
       <div className="text-center">
-        <div className="w-14 h-14 rounded-2xl bg-[#E8EEF4] flex items-center justify-center mx-auto mb-4">
-          <Loader2 className="w-7 h-7 text-[#00274C] animate-spin" />
+        <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+          <Loader2 className="w-7 h-7 text-primary animate-spin" />
         </div>
-        <p className="text-sm text-[#4A5568]">{message}</p>
+        <p className="text-sm text-secondary-text">{message}</p>
       </div>
     </div>
   );
@@ -60,13 +60,13 @@ export function StatsRowSkeleton({ count = 4 }: { count?: number }) {
 export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
     <div className="card-elevated overflow-hidden">
-      <div className="bg-[#F8FAFC] border-b border-[#E2E8F0] px-4 py-3 flex gap-4">
+      <div className="bg-muted/50 border-b border-border px-4 py-3 flex gap-4">
         {Array.from({ length: cols }).map((_, i) => (
           <Skeleton key={i} className="h-3 flex-1" />
         ))}
       </div>
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="px-4 py-3 border-b border-[#F1F5F9] flex gap-4">
+        <div key={i} className="px-4 py-3 border-b border-muted flex gap-4">
           {Array.from({ length: cols }).map((_, j) => (
             <Skeleton key={j} className="h-4 flex-1" />
           ))}
@@ -113,8 +113,8 @@ export function EmptyState({
     <div className="flex items-center justify-center p-12 text-center">
       <div>
         {icon && <div className="mb-4 flex justify-center">{icon}</div>}
-        <h3 className="text-base font-semibold text-[#00274C] mb-1">{title}</h3>
-        {description && <p className="text-sm text-[#4A5568] mb-4 max-w-sm mx-auto">{description}</p>}
+        <h3 className="text-base font-semibold text-primary mb-1">{title}</h3>
+        {description && <p className="text-sm text-secondary-text mb-4 max-w-sm mx-auto">{description}</p>}
         {action}
       </div>
     </div>

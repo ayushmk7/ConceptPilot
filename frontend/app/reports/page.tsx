@@ -1,124 +1,176 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { InstructorLayout } from '@/components/InstructorLayout';
-import { Download, FileText, Users, BarChart3, Loader2, Check, ExternalLink } from 'lucide-react';
+import { Download, FileText, Loader2, Link2 } from 'lucide-react';
 import { DotPattern } from '@/components/svg/DotPattern';
 import { PageLoader } from '@/components/LoadingSkeleton';
 import { ErrorState } from '@/components/ErrorBoundary';
-import type { ReportConfig } from '@/lib/types';
 import * as api from '@/lib/api';
-
-const reportIcons: Record<string, typeof BarChart3> = {
-  r1: BarChart3,
-  r2: Users,
-  r3: FileText,
-  r4: FileText,
-};
-
-const reportColors: Record<string, { color: string; bg: string }> = {
-  r1: { color: '#3B82F6', bg: '#EFF6FF' },
-  r2: { color: '#16A34A', bg: '#F0FDF4' },
-  r3: { color: '#F59E0B', bg: '#FFF8E1' },
-  r4: { color: '#00274C', bg: '#E8EEF4' },
-};
+import { useExam } from '@/lib/exam-context';
 
 export default function Reports() {
-  const [reports, setReports] = useState<ReportConfig[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { selectedExamId, loading: examLoading } = useExam();
+  const [exportId, setExportId] = useState<string | null>(null);
+  const [status, setStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [tokens, setTokens] = useState<Array<{ student_id: string; token: string }>>([]);
+  const [loadingTokens, setLoadingTokens] = useState(false);
+
+  const loadTokens = useCallback(async () => {
+    if (!selectedExamId) return;
+    setLoadingTokens(true);
+    try {
+      const t = await api.listReportTokens(selectedExamId);
+      setTokens(t.map((x) => ({ student_id: x.student_id, token: x.token })));
+    } catch {
+      setTokens([]);
+    } finally {
+      setLoadingTokens(false);
+    }
+  }, [selectedExamId]);
 
   useEffect(() => {
-    loadReports();
-  }, []);
+    if (selectedExamId) loadTokens();
+  }, [selectedExamId, loadTokens]);
 
-  const loadReports = async () => {
-    setLoading(true);
+  const pollExport = async (examId: string, id: string) => {
+    for (let i = 0; i < 30; i++) {
+      const s = await api.getExportStatus(examId, id);
+      if (s.status === 'ready') {
+        setStatus('ready');
+        return;
+      }
+      if (s.status === 'error') {
+        setStatus('error');
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    setStatus('error');
+  };
+
+  const handleGenerate = async () => {
+    if (!selectedExamId) return;
     setError(null);
+    setStatus('generating');
     try {
-      const data = await api.getReportConfigs('e1');
-      setReports(data);
-    } catch {
-      setError('Failed to load reports');
-    } finally {
-      setLoading(false);
+      const job = await api.createExportJob(selectedExamId);
+      setExportId(job.id);
+      await pollExport(selectedExamId, job.id);
+    } catch (e) {
+      setStatus('error');
+      setError(e instanceof Error ? e.message : 'Export failed');
     }
   };
 
-  const handleGenerate = async (reportId: string) => {
-    setGeneratingId(reportId);
-    setReports((prev) => prev.map((r) => r.id === reportId ? { ...r, status: 'generating' as const } : r));
+  const handleDownload = async () => {
+    if (!selectedExamId || !exportId) return;
     try {
-      const result = await api.generateReport(reportId);
-      setReports((prev) => prev.map((r) => r.id === reportId ? { ...r, status: result.status, downloadUrl: result.downloadUrl, generatedAt: result.generatedAt } : r));
-    } catch {
-      setReports((prev) => prev.map((r) => r.id === reportId ? { ...r, status: 'error' as const } : r));
-    } finally {
-      setGeneratingId(null);
+      const blob = await api.fetchAuthorizedBlob(`/api/v1/exams/${selectedExamId}/export/${exportId}/download`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `conceptpilot-export-${exportId}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Download failed');
     }
   };
 
-  if (loading) return <InstructorLayout><PageLoader message="Loading reports..." /></InstructorLayout>;
-  if (error) return <InstructorLayout><ErrorState message={error} onRetry={loadReports} /></InstructorLayout>;
+  if (examLoading || !selectedExamId) {
+    return (
+      <InstructorLayout>
+        <PageLoader message={!selectedExamId ? 'Select an exam from the dashboard or upload wizard.' : 'Loading…'} />
+      </InstructorLayout>
+    );
+  }
 
   return (
     <InstructorLayout>
       <div className="relative max-w-6xl mx-auto px-6 py-8">
-        <DotPattern className="text-[#94A3B8]" />
+        <DotPattern className="text-muted-foreground" />
 
         <div className="relative">
-          <h1 className="text-2xl font-semibold text-[#00274C] mb-2 animate-fade-in">Reports</h1>
-          <p className="text-sm text-[#94A3B8] mb-8 animate-fade-in">Generate and export analytics for your class.</p>
+          <h1 className="text-2xl font-semibold text-primary mb-2 animate-fade-in">Reports & exports</h1>
+          <p className="text-sm text-muted-foreground mb-8 animate-fade-in">
+            Generate a Canvas-ready bundle and copy student report links (token-based).
+          </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {reports.map((r, i) => {
-              const Icon = reportIcons[r.id] || FileText;
-              const colors = reportColors[r.id] || { color: '#94A3B8', bg: '#F1F5F9' };
-              const isGenerating = generatingId === r.id;
-
-              return (
-                <div key={r.id} className={`card-elevated p-6 animate-fade-in-up delay-${(i + 1) * 100}`}>
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: colors.bg }}>
-                      <Icon className="w-6 h-6" style={{ color: colors.color }} />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-[#00274C] mb-1">{r.title}</h3>
-                      <p className="text-sm text-[#4A5568] mb-4">{r.description}</p>
-
-                      <div className="flex items-center gap-3">
-                        {r.status === 'ready' ? (
-                          <>
-                            <a href={r.downloadUrl || '#'} className="btn-primary inline-flex items-center gap-2 py-2 px-4 text-sm">
-                              <Download className="w-4 h-4" />
-                              Download {r.format.toUpperCase()}
-                            </a>
-                            <span className="text-xs text-[#94A3B8]">
-                              Generated {r.generatedAt ? new Date(r.generatedAt).toLocaleString() : 'just now'}
-                            </span>
-                          </>
-                        ) : r.status === 'generating' || isGenerating ? (
-                          <div className="inline-flex items-center gap-2 text-sm text-[#4A5568]">
-                            <Loader2 className="w-4 h-4 animate-spin text-[#00274C]" />
-                            Generating...
-                          </div>
-                        ) : r.status === 'error' ? (
-                          <button onClick={() => handleGenerate(r.id)} className="text-sm text-[#DC2626] hover:underline inline-flex items-center gap-1">
-                            Failed — click to retry
-                          </button>
-                        ) : (
-                          <button onClick={() => handleGenerate(r.id)} className="btn-primary inline-flex items-center gap-2 py-2 px-4 text-sm">
-                            <Download className="w-4 h-4" />
-                            Generate {r.format.toUpperCase()}
-                          </button>
-                        )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+            <div className="card-elevated p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-muted">
+                  <FileText className="w-6 h-6 text-chart-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-primary mb-1">Export bundle</h3>
+                  <p className="text-sm text-secondary-text mb-4">Readiness data, graph, and metadata for downstream tools.</p>
+                  {error && <p className="text-sm text-destructive mb-2">{error}</p>}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {status === 'ready' && exportId ? (
+                      <button type="button" onClick={handleDownload} className="btn-primary inline-flex items-center gap-2 py-2 px-4 text-sm">
+                        <Download className="w-4 h-4" />
+                        Download ZIP
+                      </button>
+                    ) : status === 'generating' ? (
+                      <div className="inline-flex items-center gap-2 text-sm text-secondary-text">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        Generating…
                       </div>
-                    </div>
+                    ) : status === 'error' ? (
+                      <button type="button" onClick={handleGenerate} className="btn-primary text-sm">
+                        Retry export
+                      </button>
+                    ) : (
+                      <button type="button" onClick={handleGenerate} className="btn-primary inline-flex items-center gap-2 py-2 px-4 text-sm">
+                        <Download className="w-4 h-4" />
+                        Generate export
+                      </button>
+                    )}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            </div>
+
+            <div className="card-elevated p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50">
+                  <Link2 className="w-6 h-6 text-chart-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-semibold text-primary mb-1">Student report links</h3>
+                  <p className="text-sm text-secondary-text mb-3">Share read-only links (after compute has run).</p>
+                  {loadingTokens ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  ) : tokens.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No tokens yet — run compute first.</p>
+                  ) : (
+                    <ul className="max-h-48 overflow-y-auto space-y-2 text-xs">
+                      {tokens.map((t) => {
+                        const href =
+                          typeof window !== 'undefined'
+                            ? `${window.location.origin}/access/${t.token}`
+                            : `/access/${t.token}`;
+                        return (
+                          <li key={t.student_id} className="flex justify-between gap-2 border border-border rounded-lg px-2 py-1.5">
+                            <span className="font-mono text-secondary-text truncate">{t.student_id}</span>
+                            <button
+                              type="button"
+                              className="text-primary shrink-0"
+                              onClick={() => navigator.clipboard.writeText(href)}
+                            >
+                              Copy link
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

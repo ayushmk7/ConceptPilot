@@ -3,6 +3,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { User, AuthState } from './types';
 import * as api from './api';
+import { clearStudentSession } from './student-report';
+import { clearInstructorBasic } from './api';
+import { STORAGE_AUTH_TOKEN_KEY } from './config';
 
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
@@ -24,19 +27,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check for existing session on mount
   useEffect(() => {
-    const token = localStorage.getItem('prereq_token');
+    const token = localStorage.getItem(STORAGE_AUTH_TOKEN_KEY);
     if (token) {
       api.validateToken(token)
         .then((user) => {
           if (user) {
             setState({ user, isAuthenticated: true, isLoading: false, token });
           } else {
-            localStorage.removeItem('prereq_token');
+            localStorage.removeItem(STORAGE_AUTH_TOKEN_KEY);
             setState((s) => ({ ...s, isLoading: false }));
           }
         })
         .catch(() => {
-          localStorage.removeItem('prereq_token');
+          localStorage.removeItem(STORAGE_AUTH_TOKEN_KEY);
           setState((s) => ({ ...s, isLoading: false }));
         });
     } else {
@@ -49,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, isLoading: true }));
     try {
       const { user, token } = await api.login(email, password);
-      localStorage.setItem('prereq_token', token);
+      localStorage.setItem(STORAGE_AUTH_TOKEN_KEY, token);
       setState({ user, isAuthenticated: true, isLoading: false, token });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -64,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const result = await api.validateStudentToken(token);
       if (result) {
         const user: User = { id: result.id, name: result.name, email: result.email, role: result.role };
-        localStorage.setItem('prereq_token', `student_token_${token}`);
+        localStorage.setItem(STORAGE_AUTH_TOKEN_KEY, `student_token_${token}`);
         setState({ user, isAuthenticated: true, isLoading: false, token: `student_token_${token}` });
       } else {
         setError('Invalid or expired access link');
@@ -77,7 +80,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('prereq_token');
+    localStorage.removeItem(STORAGE_AUTH_TOKEN_KEY);
+    clearStudentSession();
+    clearInstructorBasic();
     setState({ user: null, isAuthenticated: false, isLoading: false, token: null });
   }, []);
 

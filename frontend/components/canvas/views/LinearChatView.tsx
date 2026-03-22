@@ -32,14 +32,14 @@ export function LinearChatView({
   return (
     <div className="flex flex-col h-full w-full max-w-2xl mx-auto bg-white">
       {/* Header */}
-      <div className="h-12 bg-[#00274C] px-5 flex items-center shrink-0">
+      <div className="h-12 bg-primary px-5 flex items-center shrink-0">
         <span className="text-white text-sm font-semibold">{title}</span>
       </div>
 
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3">
         {messages.length === 0 && !isLoading && (
-          <div className="flex items-center justify-center h-full text-sm text-[#94A3B8]">
+          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
             Start a conversation to get help studying
           </div>
         )}
@@ -53,8 +53,8 @@ export function LinearChatView({
         ))}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-white border border-[#E2E8F0] rounded-lg px-4 py-3">
-              <Loader2 className="w-4 h-4 text-[#00274C] animate-spin" />
+            <div className="bg-white border border-border rounded-lg px-4 py-3">
+              <Loader2 className="w-4 h-4 text-primary animate-spin" />
             </div>
           </div>
         )}

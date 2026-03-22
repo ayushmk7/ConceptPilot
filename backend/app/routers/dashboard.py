@@ -20,6 +20,7 @@ from app.models.models import (
 from app.schemas.schemas import (
     AggregateItem,
     AlertItem,
+    AlertsResponse,
     DashboardResponse,
     DownstreamContribution,
     HeatmapCell,
@@ -122,6 +123,47 @@ async def get_dashboard(
         alerts=alerts,
         aggregates=agg_items,
     )
+
+
+@router.get("/{exam_id}/dashboard/alerts", response_model=AlertsResponse)
+async def get_alerts(
+    exam_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: str = Depends(get_current_instructor),
+):
+    """Foundational gap alerts only (subset of the full dashboard)."""
+    result = await db.execute(select(Exam).where(Exam.id == exam_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    agg_result = await db.execute(
+        select(ClassAggregate).where(ClassAggregate.exam_id == exam_id)
+    )
+    aggregates = agg_result.scalars().all()
+    if not aggregates:
+        return AlertsResponse()
+
+    g_result = await db.execute(
+        select(ConceptGraph)
+        .where(ConceptGraph.exam_id == exam_id)
+        .order_by(ConceptGraph.version.desc())
+        .limit(1)
+    )
+    graph_row = g_result.scalar_one_or_none()
+    label_map: dict[str, str] = {}
+    G = None
+    if graph_row:
+        G = build_graph(graph_row.graph_json)
+        for n in graph_row.graph_json.get("nodes", []):
+            label_map[n["id"]] = n.get("label", n["id"])
+
+    params_result = await db.execute(
+        select(Parameter).where(Parameter.exam_id == exam_id)
+    )
+    params = params_result.scalar_one_or_none()
+    threshold = params.threshold if params else 0.6
+
+    return AlertsResponse(alerts=_build_alerts(aggregates, G, label_map, threshold))
 
 
 def _build_heatmap(

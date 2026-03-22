@@ -51,6 +51,7 @@ class Exam(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(255), nullable=False)
+    state = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
 
     course = relationship("Course", back_populates="exams")
@@ -67,6 +68,36 @@ class Exam(Base):
     ai_suggestions = relationship("AISuggestion", back_populates="exam", cascade="all, delete-orphan")
     intervention_results = relationship("InterventionResult", back_populates="exam", cascade="all, delete-orphan")
     export_runs = relationship("ExportRun", back_populates="exam", cascade="all, delete-orphan")
+    projects = relationship("Project", back_populates="exam", cascade="all, delete-orphan")
+    study_contents = relationship("StudyContent", back_populates="exam", cascade="all, delete-orphan")
+
+
+# ---------------------------------------------------------------------------
+# Projects
+# ---------------------------------------------------------------------------
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    exam_id = Column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    exam = relationship("Exam", back_populates="projects")
+    study_contents = relationship("StudyContent", back_populates="project")
+
+
+class CanvasWorkspace(Base):
+    """Instructor canvas (React Flow) workspace persisted as JSON."""
+
+    __tablename__ = "canvas_workspaces"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    title = Column(String(255), nullable=False)
+    state = Column(JSONB, nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, nullable=False)
 
 
 # ---------------------------------------------------------------------------
@@ -374,6 +405,33 @@ class ExportRun(Base):
     completed_at = Column(DateTime, nullable=True)
 
     exam = relationship("Exam", back_populates="export_runs")
+
+
+# ---------------------------------------------------------------------------
+# Study Content
+# ---------------------------------------------------------------------------
+
+class StudyContent(Base):
+    __tablename__ = "study_content"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    exam_id = Column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    content_type = Column(String(32), nullable=False)  # audio, presentation, video_walkthrough
+    title = Column(String(255), nullable=False)
+    source_context = Column(JSONB, nullable=False)
+    storage_key = Column(Text, nullable=True)
+    transcript = Column(Text, nullable=True)
+    slides_data = Column(JSONB, nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending, generating, completed, failed
+    error_detail = Column(Text, nullable=True)
+    prompt_version = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    exam = relationship("Exam", back_populates="study_contents")
+    project = relationship("Project", back_populates="study_contents")
 
 
 # ---------------------------------------------------------------------------

@@ -11,6 +11,7 @@ from app.auth import get_current_instructor
 from app.config import settings
 from app.database import get_db
 from app.models.models import ComputeRun, Exam, InterventionResult, Parameter
+from app.rate_limit import enforce_instructor_write_limit
 from app.schemas.schemas import ComputeRequest, ComputeResponse, ComputeRunResponse
 from app.services.compute_queue_service import enqueue_compute_job
 from app.services.compute_runner_service import run_compute_pipeline_for_run
@@ -23,6 +24,7 @@ async def compute_readiness(
     exam_id: UUID,
     body: ComputeRequest = ComputeRequest(),
     db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(enforce_instructor_write_limit),
     _user: str = Depends(get_current_instructor),
 ):
     """Run compute in sync mode or enqueue in async mode."""
@@ -125,6 +127,40 @@ async def list_compute_runs(
         )
         for r in runs
     ]
+
+
+@router.get("/{exam_id}/compute/runs/{run_id}", response_model=ComputeRunResponse)
+async def get_compute_run(
+    exam_id: UUID,
+    run_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: str = Depends(get_current_instructor),
+):
+    """Get a single compute run by its run_id."""
+    result = await db.execute(
+        select(ComputeRun).where(
+            ComputeRun.exam_id == exam_id,
+            ComputeRun.run_id == run_id,
+        )
+    )
+    r = result.scalar_one_or_none()
+    if not r:
+        raise HTTPException(status_code=404, detail="Compute run not found")
+
+    return ComputeRunResponse(
+        id=r.id,
+        run_id=r.run_id,
+        exam_id=r.exam_id,
+        status=r.status,
+        students_processed=r.students_processed,
+        concepts_processed=r.concepts_processed,
+        parameters=r.parameters_json,
+        graph_version=r.graph_version,
+        duration_ms=r.duration_ms,
+        error_message=r.error_message,
+        created_at=r.created_at,
+        completed_at=r.completed_at,
+    )
 
 
 @router.get("/{exam_id}/interventions")

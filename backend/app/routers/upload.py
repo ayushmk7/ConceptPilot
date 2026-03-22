@@ -16,10 +16,14 @@ from app.models.models import (
     QuestionConceptMap,
     Score,
 )
+from app.rate_limit import enforce_instructor_write_limit
 from app.schemas.schemas import (
     GraphUploadRequest,
     GraphUploadResponse,
+    MappingItem,
+    MappingRetrieveResponse,
     MappingUploadResponse,
+    ScoresSummaryResponse,
     ScoresUploadResponse,
 )
 from app.services.csv_service import validate_mapping_csv, validate_scores_csv
@@ -38,6 +42,7 @@ async def upload_scores(
     exam_id: UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(enforce_instructor_write_limit),
     _user: str = Depends(get_current_instructor),
 ):
     """Upload exam scores CSV. Validates and persists to DB.
@@ -104,6 +109,7 @@ async def upload_mapping(
     exam_id: UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(enforce_instructor_write_limit),
     _user: str = Depends(get_current_instructor),
 ):
     """Upload question-to-concept mapping CSV.
@@ -172,6 +178,7 @@ async def upload_graph(
     exam_id: UUID,
     body: GraphUploadRequest,
     db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(enforce_instructor_write_limit),
     _user: str = Depends(get_current_instructor),
 ):
     """Upload concept dependency graph as JSON.
@@ -228,4 +235,87 @@ async def upload_graph(
         node_count=len(body.nodes),
         edge_count=len(body.edges),
         is_dag=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET scores/summary
+# ---------------------------------------------------------------------------
+
+@router.get("/{exam_id}/scores/summary", response_model=ScoresSummaryResponse)
+async def scores_summary(
+    exam_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: str = Depends(get_current_instructor),
+):
+    """Aggregate statistics for uploaded scores."""
+    from sqlalchemy import func, distinct
+
+    result = await db.execute(select(Exam).where(Exam.id == exam_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    row = (
+        await db.execute(
+            select(
+                func.count(Score.id).label("total_rows"),
+                func.count(distinct(Score.student_id_external)).label("student_count"),
+                func.count(distinct(Score.question_id)).label("question_count"),
+            ).where(Score.exam_id == exam_id)
+        )
+    ).one()
+
+    return ScoresSummaryResponse(
+        total_rows=row.total_rows,
+        student_count=row.student_count,
+        question_count=row.question_count,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET mapping
+# ---------------------------------------------------------------------------
+
+@router.get("/{exam_id}/mapping", response_model=MappingRetrieveResponse)
+async def get_mapping(
+    exam_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: str = Depends(get_current_instructor),
+):
+    """Return the persisted question-to-concept mapping for an exam."""
+    result = await db.execute(select(Exam).where(Exam.id == exam_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    q_result = await db.execute(
+        select(Question).where(Question.exam_id == exam_id)
+    )
+    questions = {q.id: q.question_id_external for q in q_result.scalars().all()}
+
+    if not questions:
+        return MappingRetrieveResponse(status="empty")
+
+    m_result = await db.execute(
+        select(QuestionConceptMap).where(
+            QuestionConceptMap.question_id.in_(list(questions.keys()))
+        )
+    )
+    mappings = m_result.scalars().all()
+
+    concept_ids: set[str] = set()
+    items: list[MappingItem] = []
+    for m in mappings:
+        concept_ids.add(m.concept_id)
+        items.append(
+            MappingItem(
+                question_id=questions[m.question_id],
+                concept_id=m.concept_id,
+                weight=m.weight,
+            )
+        )
+
+    return MappingRetrieveResponse(
+        status="ok",
+        concept_count=len(concept_ids),
+        mappings=items,
     )

@@ -78,7 +78,7 @@ export interface ReadinessParams {
 }
 
 export interface AISuggestion {
-  id: number;
+  id: string;
   type: 'Edge' | 'Concept Tag' | 'Intervention' | 'Graph Expansion';
   created: string;
   status: 'pending' | 'accepted' | 'rejected';

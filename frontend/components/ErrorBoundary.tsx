@@ -34,11 +34,11 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-[300px] flex items-center justify-center p-8">
           <div className="text-center max-w-md">
-            <div className="w-14 h-14 rounded-2xl bg-[#FEF2F2] flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-7 h-7 text-[#DC2626]" />
+            <div className="w-14 h-14 rounded-2xl bg-destructive/10 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-7 h-7 text-destructive" />
             </div>
-            <h3 className="text-lg font-semibold text-[#00274C] mb-2">Something went wrong</h3>
-            <p className="text-sm text-[#4A5568] mb-4">
+            <h3 className="text-lg font-semibold text-primary mb-2">Something went wrong</h3>
+            <p className="text-sm text-secondary-text mb-4">
               {this.state.error?.message || 'An unexpected error occurred. Please try again.'}
             </p>
             <button
@@ -68,12 +68,12 @@ export function ErrorState({
   return (
     <div className="flex items-center justify-center p-8 text-center">
       <div>
-        <div className="w-12 h-12 rounded-xl bg-[#FEF2F2] flex items-center justify-center mx-auto mb-3">
-          <AlertTriangle className="w-5 h-5 text-[#DC2626]" />
+        <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center mx-auto mb-3">
+          <AlertTriangle className="w-5 h-5 text-destructive" />
         </div>
-        <p className="text-sm text-[#4A5568] mb-3">{message}</p>
+        <p className="text-sm text-secondary-text mb-3">{message}</p>
         {onRetry && (
-          <button onClick={onRetry} className="text-sm text-[#00274C] font-medium hover:underline inline-flex items-center gap-1.5">
+          <button onClick={onRetry} className="text-sm text-primary font-medium hover:underline inline-flex items-center gap-1.5">
             <RotateCcw className="w-3.5 h-3.5" />
             Retry
           </button>

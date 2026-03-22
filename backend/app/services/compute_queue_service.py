@@ -1,8 +1,8 @@
 """Queue abstraction for async compute jobs.
 
-Current implementation uses a JSON file queue as a portable scaffold that works
-without extra infrastructure. OCI Queue integration can replace this backend
-behind the same interface.
+Backends:
+- file: JSON file queue, simple single-instance local/dev setup.
+- redis: shared queue suitable for multi-instance workers.
 """
 
 from __future__ import annotations
@@ -30,6 +30,14 @@ class ComputeQueueJob:
 
 def _queue_file_path() -> Path:
     return Path(settings.COMPUTE_QUEUE_FILE)
+
+
+def _redis_url() -> str:
+    return settings.COMPUTE_QUEUE_REDIS_URL.strip()
+
+
+def _redis_key() -> str:
+    return settings.COMPUTE_QUEUE_REDIS_KEY.strip() or "conceptpilot:compute:queue"
 
 
 def _read_queue() -> list[dict]:
@@ -62,33 +70,46 @@ async def enqueue_compute_job(
     k: int,
 ) -> bool:
     """Enqueue a compute job for async processing."""
-    if settings.COMPUTE_QUEUE_BACKEND != "file":
-        return False
+    job = ComputeQueueJob(
+        exam_id=str(exam_id),
+        run_id=str(run_id),
+        alpha=alpha,
+        beta=beta,
+        gamma=gamma,
+        threshold=threshold,
+        k=k,
+    )
+    backend = settings.COMPUTE_QUEUE_BACKEND
 
-    def _enqueue() -> bool:
+    def _enqueue_file() -> bool:
         jobs = _read_queue()
-        job = ComputeQueueJob(
-            exam_id=str(exam_id),
-            run_id=str(run_id),
-            alpha=alpha,
-            beta=beta,
-            gamma=gamma,
-            threshold=threshold,
-            k=k,
-        )
         jobs.append(asdict(job))
         _write_queue(jobs)
         return True
 
-    return await asyncio.to_thread(_enqueue)
+    if backend == "file":
+        return await asyncio.to_thread(_enqueue_file)
+
+    if backend == "redis":
+        if not _redis_url():
+            return False
+        try:
+            import redis.asyncio as redis
+        except Exception:
+            return False
+
+        client = redis.from_url(_redis_url(), decode_responses=True)
+        await client.rpush(_redis_key(), json.dumps(asdict(job)))
+        return True
+
+    return False
 
 
 async def pop_next_compute_job() -> Optional[ComputeQueueJob]:
     """Pop one queued compute job, returning None when queue is empty."""
-    if settings.COMPUTE_QUEUE_BACKEND != "file":
-        return None
+    backend = settings.COMPUTE_QUEUE_BACKEND
 
-    def _pop() -> Optional[ComputeQueueJob]:
+    def _pop_file() -> Optional[ComputeQueueJob]:
         jobs = _read_queue()
         if not jobs:
             return None
@@ -96,4 +117,21 @@ async def pop_next_compute_job() -> Optional[ComputeQueueJob]:
         _write_queue(jobs)
         return ComputeQueueJob(**raw)
 
-    return await asyncio.to_thread(_pop)
+    if backend == "file":
+        return await asyncio.to_thread(_pop_file)
+
+    if backend == "redis":
+        if not _redis_url():
+            return None
+        try:
+            import redis.asyncio as redis
+        except Exception:
+            return None
+
+        client = redis.from_url(_redis_url(), decode_responses=True)
+        raw = await client.lpop(_redis_key())
+        if not raw:
+            return None
+        return ComputeQueueJob(**json.loads(raw))
+
+    return None

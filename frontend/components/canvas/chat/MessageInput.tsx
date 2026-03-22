@@ -40,7 +40,7 @@ export function MessageInput({
   };
 
   return (
-    <div className="p-3 border-t border-[#E2E8F0]">
+    <div className="p-3 border-t border-border">
       <div className="flex items-end gap-2">
         <textarea
           ref={inputRef}
@@ -50,12 +50,12 @@ export function MessageInput({
           placeholder={placeholder}
           disabled={disabled}
           rows={1}
-          className="flex-1 px-3 py-2 border border-[#CBD5E1] rounded-md text-sm outline-none focus:ring-2 focus:ring-[#00274C] resize-none disabled:opacity-50 disabled:cursor-not-allowed nowheel nodrag"
+          className="flex-1 px-3 py-2 border border-input rounded-md text-sm outline-none focus:ring-2 focus:ring-primary resize-none disabled:opacity-50 disabled:cursor-not-allowed nowheel nodrag"
         />
         <button
           onClick={handleSend}
           disabled={disabled || !input.trim()}
-          className="w-9 h-9 bg-[#00274C] rounded-full flex items-center justify-center hover:bg-[#1B365D] transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-9 h-9 bg-primary rounded-full flex items-center justify-center hover:bg-chart-2 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Send className="w-4 h-4 text-white" />
         </button>

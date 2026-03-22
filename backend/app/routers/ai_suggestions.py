@@ -414,6 +414,18 @@ async def review_suggestion(
     return {"status": "ok", "suggestion_status": suggestion.status}
 
 
+@router.patch("/{exam_id}/ai/suggestions/{suggestion_id}")
+async def patch_suggestion(
+    exam_id: UUID,
+    suggestion_id: UUID,
+    body: SuggestionReviewAction,
+    db: AsyncSession = Depends(get_db),
+    _user: str = Depends(get_current_instructor),
+):
+    """Accept or reject a suggestion via PATCH (PRD §2.3.1 contract)."""
+    return await review_suggestion(exam_id, suggestion_id, body, db, _user)
+
+
 # ---------------------------------------------------------------------------
 # Bulk Review
 # ---------------------------------------------------------------------------
