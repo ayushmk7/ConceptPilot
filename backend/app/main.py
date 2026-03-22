@@ -157,6 +157,11 @@ app.include_router(study_content.router)
 app.include_router(canvas_workspaces.router)
 app.include_router(canvas_router.router, prefix="/api/canvas", tags=["canvas"])
 
+# Canvas WebSocket
+from app.ws.canvas import router as canvas_ws_router  # noqa: E402
+
+app.include_router(canvas_ws_router)
+
 
 @app.get("/", tags=["Root"])
 async def root():
