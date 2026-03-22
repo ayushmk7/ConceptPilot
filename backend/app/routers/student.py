@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid as uuid_mod
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -13,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
+from app.models.canvas import CanvasProject
 from app.models.models import (
+    CanvasWorkspace,
     ComputeRun,
     ConceptGraph,
     Course,
@@ -29,6 +32,8 @@ from app.models.models import (
 )
 from app.rate_limit import enforce_student_write_limit
 from app.schemas.schemas import (
+    CanvasWorkspaceResponse,
+    CanvasWorkspaceUpdate,
     ComputeRequest,
     ComputeResponse,
     GraphUploadRequest,
@@ -48,6 +53,7 @@ from app.services.report_service import build_student_report
 from app.services.student_workspace_service import (
     bootstrap_student_workspace,
     default_study_project_id,
+    ensure_student_infinite_canvas_workspace,
     get_workspace_by_exam_id,
 )
 from app.services.study_content_service import kickoff_study_content_generation
@@ -56,6 +62,16 @@ from app.services.compute_queue_service import enqueue_compute_job
 from app.services.compute_runner_service import run_compute_pipeline_for_run
 
 router = APIRouter(prefix="/api/v1/student", tags=["Student"])
+
+
+def _canvas_workspace_to_response(row: CanvasWorkspace) -> CanvasWorkspaceResponse:
+    return CanvasWorkspaceResponse(
+        id=row.id,
+        title=row.title,
+        state=row.state if isinstance(row.state, dict) else {},
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
 
 
 def _to_study_response(item: StudyContent) -> StudyContentResponse:
@@ -544,3 +560,38 @@ async def student_list_study_content(
     )
     rows = result.scalars().all()
     return StudyContentListResponse(items=[_to_study_response(row) for row in rows])
+
+
+@router.get("/canvas-workspace", response_model=CanvasWorkspaceResponse)
+async def get_student_canvas_workspace(
+    ctx: tuple[Exam, StudentWorkspace] = Depends(require_student_workspace),
+    db: AsyncSession = Depends(get_db),
+):
+    """Infinite canvas (React Flow) document for this student; same id as `canvas_projects.id`."""
+    _exam, ws = ctx
+    cp = await db.get(CanvasProject, ws.canvas_project_id)
+    title = cp.title if cp else "Canvas"
+    row = await ensure_student_infinite_canvas_workspace(db, ws.canvas_project_id, title)
+    return _canvas_workspace_to_response(row)
+
+
+@router.put("/canvas-workspace", response_model=CanvasWorkspaceResponse)
+async def put_student_canvas_workspace(
+    body: CanvasWorkspaceUpdate,
+    ctx: tuple[Exam, StudentWorkspace] = Depends(require_student_workspace),
+    db: AsyncSession = Depends(get_db),
+    _rl: None = Depends(enforce_student_write_limit),
+):
+    """Persist infinite canvas nodes/edges (JSONB) for the anonymous student workspace."""
+    _exam, ws = ctx
+    cp = await db.get(CanvasProject, ws.canvas_project_id)
+    title = cp.title if cp else "Canvas"
+    row = await ensure_student_infinite_canvas_workspace(db, ws.canvas_project_id, title)
+    if body.title is not None:
+        row.title = body.title.strip()
+    if body.state is not None:
+        row.state = body.state
+    row.updated_at = datetime.utcnow()
+    await db.flush()
+    await db.refresh(row)
+    return _canvas_workspace_to_response(row)

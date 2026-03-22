@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ReactFlow,
   Background,
@@ -21,6 +21,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 import { ChatNode, type OnBranchCreate } from '@/components/canvas/ChatNode';
 import { SmartEdge } from '@/components/canvas/edges/SmartEdge';
@@ -31,11 +32,14 @@ import { ViewToggle } from '@/components/canvas/views/ViewToggle';
 import { useCanvasEntrance } from '@/components/canvas/hooks/useCanvasEntrance';
 import '@/components/canvas/animations/canvas-entrance.css';
 import {
+  getStudentCanvasWorkspace,
   loadCanvasProject,
   saveCanvasProject,
+  updateStudentCanvasWorkspace,
   type CanvasProject,
 } from '@/lib/canvas-api';
 import { useStreamingChat, type LocalMessage } from '@/components/canvas/hooks/useStreamingChat';
+import { useStudentBootstrapOptional } from '@/lib/student-context';
 
 /* ------------------------------------------------------------------ */
 /*  Defaults                                                           */
@@ -47,7 +51,7 @@ const defaultNodes: Node[] = [
     type: 'chat',
     position: { x: 250, y: 100 },
     style: { width: 420, height: 520 },
-    data: { title: 'Study Session', skill: 'Tutor', messages: [] },
+    data: { title: 'Chat', skill: 'Tutor', messages: [] },
   },
 ];
 
@@ -68,7 +72,11 @@ export default function CanvasPage() {
 function CanvasPageInner() {
   const params = useParams<{ projectId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params.projectId;
+  const isStudentCanvas = searchParams.get('role') === 'student';
+  const roleSuffix = isStudentCanvas ? '?role=student' : '';
+  const boot = useStudentBootstrapOptional();
 
   const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(defaultEdges);
@@ -86,6 +94,8 @@ function CanvasPageInner() {
     messages: LocalMessage[];
   } | null>(null);
   const [files, setFiles] = useState<CanvasFile[]>([]);
+  /** Gate auto-save until initial load (API or localStorage) has finished. */
+  const [hydrated, setHydrated] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const { entranceClass, onInit: onCanvasInit } = useCanvasEntrance();
   const { screenToFlowPosition } = useReactFlow();
@@ -118,6 +128,16 @@ function CanvasPageInner() {
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [isPlacing]);
+
+  /* ── Student: URL must match bootstrapped canvas_project_id ── */
+  useEffect(() => {
+    if (!isStudentCanvas) return;
+    if (!boot || boot.loading) return;
+    const cid = boot.canvasProjectId;
+    if (cid && projectId !== cid) {
+      router.replace(`/canvas/${cid}?role=student`);
+    }
+  }, [isStudentCanvas, boot, projectId, router]);
 
   /* ── Active chat node for linear view ── */
   const activeChatNode = useMemo(
@@ -385,11 +405,19 @@ function CanvasPageInner() {
     );
   }, [setNodes, stableBranchCreate, handleFocusNode]);
 
-  /* ── Load project from localStorage on mount ── */
+  /* ── Load project: student → Postgres via GET /student/canvas-workspace; instructor → localStorage ── */
   useEffect(() => {
-    const saved = loadCanvasProject(projectId);
-    if (saved) {
+    let cancelled = false;
+
+    function applyFromSerialized(
+      saved: CanvasProject,
+      extra?: { viewMode?: 'canvas' | 'linear'; files?: CanvasFile[] },
+    ) {
+      if (cancelled) return;
       setWorkspaceName(saved.name);
+      if (extra?.viewMode === 'linear' || extra?.viewMode === 'canvas') setViewMode(extra.viewMode);
+      if (extra?.files && extra.files.length > 0) setFiles(extra.files);
+
       if (saved.nodes.length > 0) {
         const startX = typeof window !== 'undefined' ? window.innerWidth / 2 - 200 : 500;
         const startY = typeof window !== 'undefined' ? window.innerHeight / 2 - 200 : 300;
@@ -403,27 +431,36 @@ function CanvasPageInner() {
           if (n.type === 'chat') {
             return {
               ...nodeObj,
-              data: { ...n.data, onBranchCreate: stableBranchCreate, onBranchPlaceStart: handleBranchPlaceStart, onFocusNode: handleFocusNode, onLinkStart: handleLinkStart, onDeleteNode: handleDeleteNode, _finalPosition: finalPos },
+              data: {
+                ...n.data,
+                onBranchCreate: stableBranchCreate,
+                onBranchPlaceStart: handleBranchPlaceStart,
+                onFocusNode: handleFocusNode,
+                onLinkStart: handleLinkStart,
+                onDeleteNode: handleDeleteNode,
+                _finalPosition: finalPos,
+              },
             };
           }
           return {
             ...nodeObj,
-            data: { ...n.data, _finalPosition: finalPos }
+            data: { ...n.data, _finalPosition: finalPos },
           };
         });
         setNodes(loadedNodes);
 
-        // Spread them out to their actual saved positions to trigger the transform transition
         setTimeout(() => {
-          setNodes((nds) => nds.map(n => ({
-            ...n,
-            position: (n.data as any)._finalPosition || n.position
-          })));
+          setNodes((nds) =>
+            nds.map((n) => ({
+              ...n,
+              position: (n.data as { _finalPosition?: { x: number; y: number } })._finalPosition || n.position,
+            })),
+          );
         }, 50);
 
         setEdges(
           saved.edges.map((e) => {
-            const isLink = (e as any).data?.isLink || e.id.startsWith('link-');
+            const isLink = (e as { data?: { isLink?: boolean } }).data?.isLink || e.id.startsWith('link-');
             return {
               ...e,
               type: e.type || 'smart',
@@ -437,47 +474,167 @@ function CanvasPageInner() {
         );
       }
 
-      // Load uploaded files
-      const rawFiles = localStorage.getItem(`canvas_files_${projectId}`);
-      if (rawFiles) {
-        try { setFiles(JSON.parse(rawFiles)); } catch { /* ignore */ }
+      if (!extra?.files?.length) {
+        const rawFiles = localStorage.getItem(`canvas_files_${projectId}`);
+        if (rawFiles) {
+          try {
+            setFiles(JSON.parse(rawFiles));
+          } catch {
+            /* ignore */
+          }
+        }
       }
     }
-  }, [projectId, setNodes, setEdges, stableBranchCreate]);
 
-  /* ── Auto-save on changes (debounced) ── */
+    async function run() {
+      if (isStudentCanvas) {
+        if (!boot || boot.loading) return;
+        if (!boot.canvasProjectId) {
+          setHydrated(true);
+          return;
+        }
+        const cid = boot.canvasProjectId;
+        if (cid && projectId !== cid) return;
+
+        try {
+          const api = await getStudentCanvasWorkspace();
+          if (cancelled) return;
+          const st = api.state;
+          const hasNodes = Array.isArray(st?.nodes) && st.nodes.length > 0;
+          if (hasNodes) {
+            const pseudo: CanvasProject = {
+              id: projectId,
+              name: api.title,
+              nodes: st.nodes as CanvasProject['nodes'],
+              edges: (st.edges ?? []) as CanvasProject['edges'],
+              created_at: api.created_at,
+              updated_at: api.updated_at,
+            };
+            applyFromSerialized(pseudo, {
+              viewMode: st.viewMode,
+              files: st.files as CanvasFile[] | undefined,
+            });
+            setHydrated(true);
+            return;
+          }
+        } catch {
+          /* migrate from localStorage below */
+        }
+
+        const local = loadCanvasProject(projectId);
+        if (local && local.nodes.length > 0) {
+          applyFromSerialized(local);
+          let filesMeta: CanvasFile[] | undefined;
+          const rawFs = localStorage.getItem(`canvas_files_${projectId}`);
+          if (rawFs) {
+            try {
+              filesMeta = JSON.parse(rawFs) as CanvasFile[];
+            } catch {
+              filesMeta = undefined;
+            }
+          }
+          try {
+            await updateStudentCanvasWorkspace({
+              title: local.name,
+              state: {
+                nodes: local.nodes,
+                edges: local.edges,
+                viewMode: 'canvas',
+                files: filesMeta,
+              },
+            });
+          } catch {
+            /* ignore migration failure */
+          }
+        }
+        setHydrated(true);
+        return;
+      }
+
+      const saved = loadCanvasProject(projectId);
+      if (saved) {
+        applyFromSerialized(saved);
+      }
+      setHydrated(true);
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isStudentCanvas,
+    boot,
+    projectId,
+    stableBranchCreate,
+    handleBranchPlaceStart,
+    handleFocusNode,
+    handleLinkStart,
+    handleDeleteNode,
+    setNodes,
+    setEdges,
+  ]);
+
+  /* ── Auto-save on changes (debounced): student → API; instructor → localStorage ── */
   useEffect(() => {
+    if (!hydrated) return;
     const timer = setTimeout(() => {
+      const nodePayload = nodes.map((n) => ({
+        id: n.id,
+        type: n.type ?? 'chat',
+        position: n.position,
+        data: {
+          title: (n.data as { title?: string })?.title,
+          skill: (n.data as { skill?: string })?.skill,
+          autoBranch: (n.data as { autoBranch?: boolean })?.autoBranch,
+          linkedContext: (n.data as { linkedContext?: unknown })?.linkedContext,
+        },
+      }));
+      const edgePayload = edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        type: e.type,
+        data: e.data,
+      }));
+
+      if (isStudentCanvas) {
+        void updateStudentCanvasWorkspace({
+          title: workspaceName,
+          state: {
+            nodes: nodePayload,
+            edges: edgePayload,
+            viewMode,
+            files,
+          },
+        }).catch(() => {
+          /* offline / network; keep local copy for resilience */
+        });
+        const project: CanvasProject = {
+          id: projectId,
+          name: workspaceName,
+          nodes: nodePayload as CanvasProject['nodes'],
+          edges: edgePayload as CanvasProject['edges'],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        saveCanvasProject(project);
+        localStorage.setItem(`canvas_files_${projectId}`, JSON.stringify(files));
+        return;
+      }
+
       const project: CanvasProject = {
         id: projectId,
         name: workspaceName,
-        nodes: nodes.map((n) => ({
-          id: n.id,
-          type: n.type ?? 'chat',
-          position: n.position,
-          data: {
-            title: (n.data as any)?.title,
-            skill: (n.data as any)?.skill,
-            autoBranch: (n.data as any)?.autoBranch,
-            linkedContext: (n.data as any)?.linkedContext,
-          },
-        })),
-        edges: edges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          type: e.type,
-          data: e.data,
-        })),
+        nodes: nodePayload as CanvasProject['nodes'],
+        edges: edgePayload as CanvasProject['edges'],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       saveCanvasProject(project);
 
-      // Persist files alongside the project
       localStorage.setItem(`canvas_files_${projectId}`, JSON.stringify(files));
 
-      // Update the project index
       const rawIndex = localStorage.getItem('canvas_projects_index');
       if (rawIndex) {
         const index = JSON.parse(rawIndex) as { id: string; name: string; updatedAt: string }[];
@@ -490,7 +647,7 @@ function CanvasPageInner() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [nodes, edges, workspaceName, projectId, files]);
+  }, [nodes, edges, workspaceName, projectId, files, hydrated, isStudentCanvas, viewMode]);
 
   /* ── Connect handler ── */
   const onConnect = useCallback(
@@ -525,13 +682,25 @@ function CanvasPageInner() {
   /* ── Render ── */
   return (
     <div className="h-full w-full bg-[#FAFBFC] relative">
-      {/* Back button */}
-      <button
-        onClick={() => router.push('/canvas')}
-        className="absolute top-4 left-4 z-10 p-2 bg-white rounded-lg shadow-md border border-[#E2E8F0] hover:bg-[#F1F5F9] transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4 text-[#00274C]" />
-      </button>
+      {/* Back — z above canvas scrims; preserve student ?role=student */}
+      <div className="absolute top-4 left-4 z-[100] flex flex-col gap-1.5 items-start">
+        <button
+          type="button"
+          onClick={() => router.push(`/canvas${roleSuffix}`)}
+          className="p-2 bg-white rounded-lg shadow-md border border-[#E2E8F0] hover:bg-[#F1F5F9] transition-colors"
+          aria-label="Back to workspaces"
+        >
+          <ArrowLeft className="w-4 h-4 text-[#00274C]" />
+        </button>
+        {isStudentCanvas ? (
+          <Link
+            href="/student"
+            className="text-xs font-medium text-[#00274C] underline underline-offset-2 hover:text-[#0f172a] bg-white/90 px-2 py-1 rounded border border-[#E2E8F0] shadow-sm"
+          >
+            Student overview
+          </Link>
+        ) : null}
+      </div>
 
       {/* View toggle FAB */}
       <ViewToggle view={viewMode} onToggle={toggleView} />
