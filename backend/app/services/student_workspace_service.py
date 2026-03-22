@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -10,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.canvas import CanvasProject
-from app.models.models import Course, Exam, Parameter, Project, StudentWorkspace
+from app.models.models import CanvasWorkspace, Course, Exam, Parameter, Project, StudentWorkspace
 
 
 async def bootstrap_student_workspace(db: AsyncSession) -> StudentWorkspace:
@@ -57,7 +58,34 @@ async def bootstrap_student_workspace(db: AsyncSession) -> StudentWorkspace:
     db.add(ws)
     await db.flush()
     await db.refresh(ws)
+
+    # Mirror React Flow document in `canvas_workspaces` with the same UUID as `canvas_projects.id`
+    # so the infinite canvas can persist nodes/edges cross-device.
+    await ensure_student_infinite_canvas_workspace(db, canvas.id, canvas.title)
+
     return ws
+
+
+async def ensure_student_infinite_canvas_workspace(
+    db: AsyncSession, canvas_project_id: UUID, title: str
+) -> CanvasWorkspace:
+    """Ensure a JSONB-backed row exists for the student infinite canvas (id matches canvas_projects.id)."""
+    row = await db.get(CanvasWorkspace, canvas_project_id)
+    if row:
+        return row
+    now = datetime.utcnow()
+    label = (title or "").strip() or "Canvas"
+    row = CanvasWorkspace(
+        id=canvas_project_id,
+        title=label,
+        state={},
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(row)
+    await db.flush()
+    await db.refresh(row)
+    return row
 
 
 async def get_workspace_by_exam_id(db: AsyncSession, exam_id: UUID) -> StudentWorkspace | None:
