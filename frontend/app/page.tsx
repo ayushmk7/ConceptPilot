@@ -242,6 +242,7 @@ export default function LandingPage() {
             <a href="#" className="hover:text-primary transition-colors">Contact</a>
           </div>
         </div>
+        <p className="text-center text-xs text-muted-foreground/60 mt-6">Created in Figma</p>
       </footer>
     </div>
   );
