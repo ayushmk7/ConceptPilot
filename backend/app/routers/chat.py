@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database import get_db
 from app.models.models import ChatMessage, ChatSession, Exam
 from app.schemas.schemas import (
@@ -30,11 +31,18 @@ logger = logging.getLogger("conceptpilot.chat")
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
+def _require_anthropic_for_chat() -> None:
+    if not (settings.ANTHROPIC_API_KEY or "").strip():
+        raise HTTPException(
+            status_code=503,
+            detail="Chat assistant is not configured: set ANTHROPIC_API_KEY in the backend environment.",
+        )
+
+
 @router.post("/sessions", response_model=ChatSessionResponse)
 async def create_session(
     body: ChatSessionCreate,
     db: AsyncSession = Depends(get_db),
-    _user: str = "instructor",
 ):
     """Create a new chat session, optionally scoped to an exam."""
     if body.exam_id:
@@ -45,7 +53,7 @@ async def create_session(
     session = ChatSession(
         exam_id=body.exam_id,
         title=body.title or None,
-        created_by=_user,
+        created_by=settings.CHAT_DEFAULT_CREATED_BY,
     )
     db.add(session)
     await db.flush()
@@ -91,7 +99,7 @@ async def get_messages(
     result = await db.execute(
         select(ChatMessage)
         .where(ChatMessage.session_id == session_id)
-        .order_by(ChatMessage.created_at)
+        .order_by(ChatMessage.created_at),
     )
     messages = result.scalars().all()
     return [
@@ -118,7 +126,7 @@ async def send_message(
     result = await db.execute(
         select(ChatSession)
         .where(ChatSession.id == session_id)
-        .options(selectinload(ChatSession.messages))
+        .options(selectinload(ChatSession.messages)),
     )
     session = result.scalar_one_or_none()
     if not session:
@@ -127,7 +135,17 @@ async def send_message(
     if body.exam_id and body.exam_id != session.exam_id:
         session.exam_id = body.exam_id
 
-    assistant_text, tools_called = await run_agent_turn(session, body.message, db)
+    _require_anthropic_for_chat()
+    try:
+        assistant_text, tools_called = await run_agent_turn(session, body.message, db)
+    except Exception as exc:
+        logger.exception("run_agent_turn failed (session message)")
+        detail = (
+            str(exc)[:400]
+            if settings.APP_ENV.lower() != "production"
+            else "The assistant could not complete this request. Please try again."
+        )
+        raise HTTPException(status_code=502, detail=detail) from exc
 
     if not session.title and body.message:
         session.title = body.message[:80]
@@ -143,13 +161,12 @@ async def send_message(
 async def quick_chat(
     body: ChatSendRequest,
     db: AsyncSession = Depends(get_db),
-    _user: str = "instructor",
 ):
     """One-shot chat: creates a session and sends a message in one call."""
     session = ChatSession(
         exam_id=body.exam_id,
         title=body.message[:80] if body.message else None,
-        created_by=_user,
+        created_by=settings.CHAT_DEFAULT_CREATED_BY,
     )
     db.add(session)
     await db.flush()
@@ -157,11 +174,21 @@ async def quick_chat(
     result = await db.execute(
         select(ChatSession)
         .where(ChatSession.id == session.id)
-        .options(selectinload(ChatSession.messages))
+        .options(selectinload(ChatSession.messages)),
     )
     session = result.scalar_one_or_none()
 
-    assistant_text, tools_called = await run_agent_turn(session, body.message, db)
+    _require_anthropic_for_chat()
+    try:
+        assistant_text, tools_called = await run_agent_turn(session, body.message, db)
+    except Exception as exc:
+        logger.exception("run_agent_turn failed (quick chat)")
+        detail = (
+            str(exc)[:400]
+            if settings.APP_ENV.lower() != "production"
+            else "The assistant could not complete this request. Please try again."
+        )
+        raise HTTPException(status_code=502, detail=detail) from exc
 
     return ChatSendResponse(
         session_id=session.id,

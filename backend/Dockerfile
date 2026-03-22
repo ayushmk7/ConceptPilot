@@ -13,4 +13,6 @@ COPY . /app
 
 EXPOSE 8000
 
+# Migrations are run externally before the web process starts.
+# On Railway, add  `alembic upgrade head`  as the release command.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -8,6 +8,39 @@ import pandas as pd
 from app.schemas.schemas import StudentDetectionSummary, ValidationError
 from app.services.validation_service import validate_file_limits
 
+# Canonical column names ← common aliases (PRD uses both camelCase and
+# snake_case variants; we accept all of them transparently).
+_SCORES_ALIASES: dict[str, str] = {
+    "student_id": "StudentID",
+    "studentid": "StudentID",
+    "question_id": "QuestionID",
+    "questionid": "QuestionID",
+    "score": "Score",
+    "max_score": "MaxScore",
+    "maxscore": "MaxScore",
+}
+
+_MAPPING_ALIASES: dict[str, str] = {
+    "question_id": "QuestionID",
+    "questionid": "QuestionID",
+    "concept_id": "ConceptID",
+    "conceptid": "ConceptID",
+    "concept": "ConceptID",
+    "weight": "Weight",
+}
+
+
+def _normalize_columns(df: pd.DataFrame, aliases: dict[str, str]) -> pd.DataFrame:
+    """Rename columns to canonical names using a case-insensitive alias map."""
+    rename = {}
+    for col in df.columns:
+        canonical = aliases.get(col.lower().strip())
+        if canonical and col != canonical:
+            rename[col] = canonical
+    if rename:
+        df = df.rename(columns=rename)
+    return df
+
 
 def detect_students(df: pd.DataFrame) -> StudentDetectionSummary:
     """Analyze a validated scores DataFrame and return a student detection summary."""
@@ -62,6 +95,8 @@ async def validate_scores_csv(
         if include_student_detection:
             return None, errors, None
         return None, errors
+
+    df = _normalize_columns(df, _SCORES_ALIASES)
 
     # --- Check required columns ---
     required = {"StudentID", "QuestionID", "Score"}
@@ -176,6 +211,8 @@ async def validate_mapping_csv(
     except Exception as e:
         errors.append(ValidationError(message=f"Failed to parse CSV: {str(e)}"))
         return None, errors
+
+    df = _normalize_columns(df, _MAPPING_ALIASES)
 
     # --- Check required columns ---
     required = {"QuestionID", "ConceptID"}

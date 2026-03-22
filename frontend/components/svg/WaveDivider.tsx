@@ -1,6 +1,6 @@
 export function WaveDivider({
   className = '',
-  fill = '#FAFBFC',
+  fill = 'var(--background)',
   flip = false,
 }: {
   className?: string;

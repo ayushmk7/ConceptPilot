@@ -37,7 +37,7 @@ export function MessageList({
   if (messages.length === 0 && !isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center px-4 min-h-0">
-        <div className="text-center text-sm text-[#94A3B8]">
+        <div className="text-center text-sm text-muted-foreground">
           Start a conversation to get help studying
         </div>
       </div>
@@ -63,8 +63,8 @@ export function MessageList({
       ))}
       {isLoading && (
         <div className="flex justify-start">
-          <div className="bg-white border border-[#E2E8F0] rounded-lg px-4 py-3">
-            <Loader2 className="w-4 h-4 text-[#00274C] animate-spin" />
+          <div className="bg-white border border-border rounded-lg px-4 py-3">
+            <Loader2 className="w-4 h-4 text-primary animate-spin" />
           </div>
         </div>
       )}

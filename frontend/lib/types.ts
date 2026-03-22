@@ -78,7 +78,7 @@ export interface ReadinessParams {
 }
 
 export interface AISuggestion {
-  id: number;
+  id: string;
   type: 'Edge' | 'Concept Tag' | 'Intervention' | 'Graph Expansion';
   created: string;
   status: 'pending' | 'accepted' | 'rejected';
@@ -152,23 +152,6 @@ export interface MultiplayerEvent {
   userId: string;
   payload: Record<string, unknown>;
   timestamp: string;
-}
-
-// ── Auth Types ──
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'instructor' | 'student';
-  avatarUrl?: string;
-}
-
-export interface AuthState {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  token: string | null;
 }
 
 // ── API Types ──

@@ -6,7 +6,7 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'PreReq - AI-Assisted Concept Readiness',
+  title: 'ConceptPilot - AI-Assisted Concept Readiness',
   description: 'AI-powered concept readiness analytics for instructors and students',
 };
 

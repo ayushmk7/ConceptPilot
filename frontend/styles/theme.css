@@ -22,6 +22,7 @@
   --warning: #F59E0B;
   --danger: #DC2626;
   --info: #3B82F6;
+  --violet-600: #7c3aed;
 
   /* Readiness Heatmap */
   --readiness-0: #DC2626;
@@ -156,6 +157,24 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Design tokens (avoid arbitrary hex in components) */
+  --color-secondary-text: var(--secondary-text);
+  --color-muted-text: var(--muted-text);
+  --color-blue-tint: var(--blue-tint);
+  --color-michigan-blue: var(--michigan-blue);
+  --color-maize: var(--maize);
+  --color-light-blue-wash: var(--light-blue-wash);
+  --color-warm-white: var(--warm-white);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-readiness-0: var(--readiness-0);
+  --color-readiness-1: var(--readiness-1);
+  --color-readiness-2: var(--readiness-2);
+  --color-readiness-3: var(--readiness-3);
+  --color-readiness-4: var(--readiness-4);
+  --color-violet-600: var(--violet-600);
 }
 
 /* ── Animations ── */

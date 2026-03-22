@@ -9,7 +9,6 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import (
     ClassAggregate,
@@ -37,7 +36,6 @@ async def create_export(
     exam_id: UUID,
     body: ExportRequest = ExportRequest(),
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Generate a Canvas-ready export bundle from the latest (or specified) compute run."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -74,14 +72,14 @@ async def create_export(
             select(ConceptGraph)
             .where(ConceptGraph.exam_id == exam_id)
             .order_by(ConceptGraph.version.desc())
-            .limit(1)
+            .limit(1),
         )
         graph_row = g_result.scalar_one_or_none()
         graph_json = graph_row.graph_json if graph_row else {"nodes": [], "edges": []}
 
         # Load readiness results
         rr_result = await db.execute(
-            select(ReadinessResult).where(ReadinessResult.exam_id == exam_id)
+            select(ReadinessResult).where(ReadinessResult.exam_id == exam_id),
         )
         readiness_rows = rr_result.scalars().all()
         readiness_data = [
@@ -99,7 +97,7 @@ async def create_export(
 
         # Load class aggregates
         agg_result = await db.execute(
-            select(ClassAggregate).where(ClassAggregate.exam_id == exam_id)
+            select(ClassAggregate).where(ClassAggregate.exam_id == exam_id),
         )
         agg_rows = agg_result.scalars().all()
         agg_data = [
@@ -115,7 +113,7 @@ async def create_export(
 
         # Load clusters
         cl_result = await db.execute(
-            select(Cluster).where(Cluster.exam_id == exam_id)
+            select(Cluster).where(Cluster.exam_id == exam_id),
         )
         clusters = cl_result.scalars().all()
         cluster_data = [
@@ -131,7 +129,7 @@ async def create_export(
         ca_result = await db.execute(
             select(ClusterAssignment, Cluster)
             .join(Cluster, ClusterAssignment.cluster_id == Cluster.id)
-            .where(ClusterAssignment.exam_id == exam_id)
+            .where(ClusterAssignment.exam_id == exam_id),
         )
         assignment_data = [
             {
@@ -145,7 +143,7 @@ async def create_export(
         iv_result = await db.execute(
             select(InterventionResult)
             .where(InterventionResult.exam_id == exam_id)
-            .order_by(InterventionResult.impact.desc())
+            .order_by(InterventionResult.impact.desc()),
         )
         iv_rows = iv_result.scalars().all()
         iv_data = [
@@ -163,7 +161,7 @@ async def create_export(
 
         # Load parameters
         p_result = await db.execute(
-            select(Parameter).where(Parameter.exam_id == exam_id)
+            select(Parameter).where(Parameter.exam_id == exam_id),
         )
         params = p_result.scalar_one_or_none()
         params_data = {
@@ -178,7 +176,7 @@ async def create_export(
         qcm_result = await db.execute(
             select(QuestionConceptMap, Question)
             .join(Question, QuestionConceptMap.question_id == Question.id)
-            .where(Question.exam_id == exam_id)
+            .where(Question.exam_id == exam_id),
         )
         mapping_data = [
             {
@@ -243,13 +241,12 @@ async def create_export(
 async def list_exports(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """List all export runs for an exam."""
     result = await db.execute(
         select(ExportRun)
         .where(ExportRun.exam_id == exam_id)
-        .order_by(ExportRun.created_at.desc())
+        .order_by(ExportRun.created_at.desc()),
     )
     exports = result.scalars().all()
 
@@ -270,12 +267,40 @@ async def list_exports(
     )
 
 
+@router.get("/{exam_id}/export/{export_id}", response_model=ExportStatusResponse)
+async def get_export(
+    exam_id: UUID,
+    export_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get status of a single export run."""
+    result = await db.execute(
+        select(ExportRun).where(
+            ExportRun.id == export_id,
+            ExportRun.exam_id == exam_id,
+        )
+    )
+    export_run = result.scalar_one_or_none()
+    if not export_run:
+        raise HTTPException(status_code=404, detail="Export not found")
+
+    return ExportStatusResponse(
+        id=export_run.id,
+        exam_id=export_run.exam_id,
+        status=export_run.status,
+        file_checksum=export_run.file_checksum,
+        manifest=export_run.manifest_json,
+        created_at=export_run.created_at,
+        completed_at=export_run.completed_at,
+        error_message=export_run.error_message,
+    )
+
+
 @router.get("/{exam_id}/export/{export_id}/download")
 async def download_export(
     exam_id: UUID,
     export_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Download the export zip bundle."""
     result = await db.execute(

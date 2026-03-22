@@ -12,7 +12,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import settings
-from app.database import Base, _clean_async_url, _ssl_ctx
+from app.database import Base, _build_connect_args, _clean_async_url
 from app.models.models import *  # noqa: F401, F403 — import all models for autogenerate
 
 # Alembic Config object
@@ -52,7 +52,7 @@ async def run_async_migrations() -> None:
     connectable = create_async_engine(
         database_url,
         poolclass=pool.NullPool,
-        connect_args={"ssl": _ssl_ctx},
+        connect_args=_build_connect_args(),
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

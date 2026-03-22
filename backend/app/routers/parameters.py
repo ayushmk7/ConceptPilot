@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_instructor
 from app.database import get_db
 from app.models.models import Exam, Parameter
 from app.schemas.schemas import ParametersResponse, ParametersSchema
@@ -18,7 +17,6 @@ router = APIRouter(prefix="/api/v1/exams", tags=["Parameters"])
 async def get_parameters(
     exam_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Get current computation parameters for an exam."""
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
@@ -26,7 +24,7 @@ async def get_parameters(
         raise HTTPException(status_code=404, detail="Exam not found")
 
     p_result = await db.execute(
-        select(Parameter).where(Parameter.exam_id == exam_id)
+        select(Parameter).where(Parameter.exam_id == exam_id),
     )
     params = p_result.scalar_one_or_none()
 
@@ -49,7 +47,6 @@ async def update_parameters(
     exam_id: UUID,
     body: ParametersSchema,
     db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_instructor),
 ):
     """Update computation parameters for an exam.
 
@@ -61,7 +58,7 @@ async def update_parameters(
         raise HTTPException(status_code=404, detail="Exam not found")
 
     p_result = await db.execute(
-        select(Parameter).where(Parameter.exam_id == exam_id)
+        select(Parameter).where(Parameter.exam_id == exam_id),
     )
     params = p_result.scalar_one_or_none()
 

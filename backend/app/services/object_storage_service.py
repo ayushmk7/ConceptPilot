@@ -1,4 +1,4 @@
-"""Optional OCI Object Storage integration hooks."""
+"""Optional Vultr Object Storage (S3-compatible) integration."""
 
 from __future__ import annotations
 
@@ -12,33 +12,54 @@ logger = logging.getLogger("conceptpilot.object_storage")
 
 
 def _is_enabled() -> bool:
-    return (
-        settings.OCI_OBJECT_STORAGE_ENABLED
-        and bool(settings.OCI_BUCKET_UPLOADS or settings.OCI_BUCKET_EXPORTS)
+    return bool(
+        settings.OBJECT_STORAGE_ENABLED
+        and settings.VULTR_OBJECT_STORAGE_ENDPOINT
+        and settings.VULTR_OBJECT_STORAGE_ACCESS_KEY
+        and settings.VULTR_OBJECT_STORAGE_SECRET_KEY
+        and settings.VULTR_OBJECT_STORAGE_BUCKET
     )
 
 
-def _put_object_blocking(bucket_name: str, object_name: str, payload: bytes, content_type: str) -> bool:
+def _put_object_blocking(object_name: str, payload: bytes, content_type: str) -> bool:
     try:
-        import oci  # type: ignore
+        import boto3
+        from botocore.config import Config as BotoConfig
     except Exception:
-        logger.warning("OCI SDK unavailable; skipping upload for %s", object_name)
+        logger.warning("boto3 unavailable; skipping S3 upload for %s", object_name)
         return False
 
-    config = oci.config.from_file(
-        file_location=settings.OCI_CONFIG_FILE,
-        profile_name=settings.OCI_CONFIG_PROFILE,
+    client = boto3.client(
+        "s3",
+        endpoint_url=settings.VULTR_OBJECT_STORAGE_ENDPOINT,
+        aws_access_key_id=settings.VULTR_OBJECT_STORAGE_ACCESS_KEY,
+        aws_secret_access_key=settings.VULTR_OBJECT_STORAGE_SECRET_KEY,
+        config=BotoConfig(signature_version="s3v4"),
     )
-    client = oci.object_storage.ObjectStorageClient(config)
-    namespace = settings.OCI_OBJECT_STORAGE_NAMESPACE or client.get_namespace().data
+    bucket = settings.VULTR_OBJECT_STORAGE_BUCKET
     client.put_object(
-        namespace_name=namespace,
-        bucket_name=bucket_name,
-        object_name=object_name,
-        put_object_body=payload,
-        content_type=content_type,
+        Bucket=bucket,
+        Key=object_name,
+        Body=payload,
+        ContentType=content_type,
     )
     return True
+
+
+def _get_object_blocking(object_name: str) -> bytes:
+    import boto3
+    from botocore.config import Config as BotoConfig
+
+    client = boto3.client(
+        "s3",
+        endpoint_url=settings.VULTR_OBJECT_STORAGE_ENDPOINT,
+        aws_access_key_id=settings.VULTR_OBJECT_STORAGE_ACCESS_KEY,
+        aws_secret_access_key=settings.VULTR_OBJECT_STORAGE_SECRET_KEY,
+        config=BotoConfig(signature_version="s3v4"),
+    )
+    bucket = settings.VULTR_OBJECT_STORAGE_BUCKET
+    obj = client.get_object(Bucket=bucket, Key=object_name)
+    return obj["Body"].read()
 
 
 async def upload_raw_upload_artifact(
@@ -48,13 +69,12 @@ async def upload_raw_upload_artifact(
     content_type: str = "text/csv",
 ) -> bool:
     """Best-effort upload hook for raw uploaded files."""
-    if not _is_enabled() or not settings.OCI_BUCKET_UPLOADS:
+    if not _is_enabled():
         return False
     object_name = f"uploads/{exam_id}/{artifact_kind}"
     try:
         return await asyncio.to_thread(
             _put_object_blocking,
-            settings.OCI_BUCKET_UPLOADS,
             object_name,
             payload,
             content_type,
@@ -66,7 +86,7 @@ async def upload_raw_upload_artifact(
 
 async def upload_export_bundle_artifact(exam_id: str, file_path: str) -> bool:
     """Best-effort upload hook for generated export bundles."""
-    if not _is_enabled() or not settings.OCI_BUCKET_EXPORTS:
+    if not _is_enabled():
         return False
     filename = Path(file_path).name
     object_name = f"exports/{exam_id}/{filename}"
@@ -74,7 +94,6 @@ async def upload_export_bundle_artifact(exam_id: str, file_path: str) -> bool:
         payload = Path(file_path).read_bytes()
         return await asyncio.to_thread(
             _put_object_blocking,
-            settings.OCI_BUCKET_EXPORTS,
             object_name,
             payload,
             "application/zip",
@@ -82,3 +101,34 @@ async def upload_export_bundle_artifact(exam_id: str, file_path: str) -> bool:
     except Exception:
         logger.exception("Failed object storage export upload: %s", object_name)
         return False
+
+
+async def put_object_bytes(
+    object_name: str,
+    payload: bytes,
+    content_type: str,
+) -> bool:
+    """Generic best-effort object upload for generated artifacts."""
+    if not _is_enabled():
+        return False
+    try:
+        return await asyncio.to_thread(
+            _put_object_blocking,
+            object_name,
+            payload,
+            content_type,
+        )
+    except Exception:
+        logger.exception("Failed object storage upload: %s", object_name)
+        return False
+
+
+async def get_object_bytes(object_name: str) -> bytes | None:
+    """Fetch bytes from object storage if configured."""
+    if not _is_enabled():
+        return None
+    try:
+        return await asyncio.to_thread(_get_object_blocking, object_name)
+    except Exception:
+        logger.exception("Failed object storage download: %s", object_name)
+        return None

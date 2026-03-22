@@ -3,48 +3,81 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, FileText, Sparkles, MessageSquare, ChevronRight, ChevronLeft, GitBranch } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Upload,
+  FileText,
+  Sparkles,
+  MessageSquare,
+  ChevronRight,
+  ChevronLeft,
+  GitBranch,
+  Headphones,
+} from 'lucide-react';
+import { useExam } from '@/lib/exam-context';
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
+  const {
+    courses,
+    exams,
+    selectedCourseId,
+    selectedExamId,
+    setSelectedCourseId,
+    setSelectedExamId,
+    loading: examLoading,
+  } = useExam();
 
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/upload', label: 'Upload', icon: Upload },
-    { path: '/graph', label: 'Graph Editor', icon: GitBranch },
     { path: '/reports', label: 'Reports', icon: FileText },
     { path: '/suggestions', label: 'AI Suggestions', icon: Sparkles },
-    { path: '/canvas', label: 'Canvas', icon: MessageSquare, href: '/canvas?role=instructor' },
   ];
 
   const isActive = (path: string) => (path === '/canvas' ? pathname.startsWith('/canvas') : pathname === path);
 
   return (
-    <div className={`hidden md:flex bg-gradient-to-b from-[#F8FAFC] to-[#F1F5F9] border-r border-[#E2E8F0] transition-all duration-300 flex-col ${isCollapsed ? 'w-14' : 'w-60'}`}>
+    <div className={`hidden md:flex bg-gradient-to-b from-sidebar to-sidebar border-r border-border transition-all duration-300 flex-col ${isCollapsed ? 'w-14' : 'w-60'}`}>
       <div className="flex-1 py-6">
         <div className="px-4 mb-6">
-          <div className={`text-[10px] font-semibold text-[#94A3B8] tracking-widest mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
+          <div className={`text-[10px] font-semibold text-muted-foreground tracking-widest mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
             COURSE
           </div>
-          <select className={`w-full px-3 py-2 border border-[#CBD5E1] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#00274C]/20 bg-white shadow-sm ${isCollapsed ? 'hidden' : 'block'}`}>
-            <option>EECS 280</option>
-            <option>EECS 281</option>
+          <select
+            value={selectedCourseId ?? ''}
+            onChange={(e) => setSelectedCourseId(e.target.value || null)}
+            className={`w-full px-3 py-2 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white shadow-sm ${isCollapsed ? 'hidden' : 'block'}`}
+          >
+            <option value="" disabled>
+              {examLoading ? 'Loading…' : courses.length === 0 ? 'No courses yet' : 'Select course'}
+            </option>
+            {courses.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
           </select>
         </div>
 
         <div className="px-4 mb-6">
-          <div className={`text-[10px] font-semibold text-[#94A3B8] tracking-widest mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
+          <div className={`text-[10px] font-semibold text-muted-foreground tracking-widest mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
             EXAM
           </div>
-          <select className={`w-full px-3 py-2 border border-[#CBD5E1] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#00274C]/20 bg-white shadow-sm ${isCollapsed ? 'hidden' : 'block'}`}>
-            <option>Midterm 1</option>
-            <option>Midterm 2</option>
-            <option>Final</option>
+          <select
+            value={selectedExamId ?? ''}
+            onChange={(e) => setSelectedExamId(e.target.value || null)}
+            className={`w-full px-3 py-2 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white shadow-sm ${isCollapsed ? 'hidden' : 'block'}`}
+          >
+            <option value="" disabled>
+              {examLoading ? 'Loading…' : exams.length === 0 ? 'No exams yet' : 'Select exam'}
+            </option>
+            {exams.map((ex) => (
+              <option key={ex.id} value={ex.id}>{ex.name}</option>
+            ))}
           </select>
         </div>
 
-        <div className={`text-[10px] font-semibold text-[#94A3B8] tracking-widest px-4 mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
+        <div className={`text-[10px] font-semibold text-muted-foreground tracking-widest px-4 mb-2 ${isCollapsed ? 'hidden' : 'block'}`}>
           QUICK LINKS
         </div>
 
@@ -55,15 +88,15 @@ export function Sidebar() {
             return (
               <Link
                 key={item.path}
-                href={item.href ?? item.path}
+                href={item.path}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                   active
-                    ? 'bg-[#FFF8E1] text-[#00274C] shadow-sm border border-[#FFCB05]/20'
-                    : 'text-[#4A5568] hover:bg-white hover:shadow-sm border border-transparent'
+                    ? 'bg-sidebar-accent text-primary shadow-sm border border-accent/20'
+                    : 'text-secondary-text hover:bg-card hover:shadow-sm border border-transparent'
                 }`}
                 title={isCollapsed ? item.label : ''}
               >
-                <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-[#00274C]' : 'text-[#94A3B8]'}`} />
+                <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
                 {!isCollapsed && <span className="text-sm font-medium">{item.label}</span>}
               </Link>
             );
@@ -90,12 +123,12 @@ export function Sidebar() {
 
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="p-3.5 border-t border-[#E2E8F0] hover:bg-[#E8EEF4] transition-colors flex items-center justify-center"
+        className="p-3.5 border-t border-border hover:bg-muted transition-colors flex items-center justify-center"
       >
         {isCollapsed ? (
-          <ChevronRight className="w-5 h-5 text-[#94A3B8]" />
+          <ChevronRight className="w-5 h-5 text-muted-foreground" />
         ) : (
-          <ChevronLeft className="w-5 h-5 text-[#94A3B8]" />
+          <ChevronLeft className="w-5 h-5 text-muted-foreground" />
         )}
       </button>
     </div>

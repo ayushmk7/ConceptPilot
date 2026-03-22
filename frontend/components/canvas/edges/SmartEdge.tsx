@@ -7,6 +7,7 @@ import {
   type EdgeProps,
   type Node,
 } from '@xyflow/react';
+import { themeColor } from '@/lib/theme-colors';
 
 /* ─── Types ─── */
 
@@ -221,7 +222,7 @@ export function SmartEdge({
       path={path}
       style={{
         ...style,
-        stroke: style?.stroke ?? '#94A3B8',
+        stroke: style?.stroke ?? themeColor.mutedForeground,
         strokeWidth: (style?.strokeWidth as number) ?? 2,
       }}
       markerEnd={markerEnd}

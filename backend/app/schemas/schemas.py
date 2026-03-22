@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +58,49 @@ class ExamResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Projects
+# ---------------------------------------------------------------------------
+
+class ProjectCreate(BaseModel):
+    exam_id: UUID
+    title: str = Field(..., min_length=1, max_length=255)
+
+
+class ProjectResponse(BaseModel):
+    id: UUID
+    exam_id: UUID
+    title: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Canvas workspaces (instructor UI)
+# ---------------------------------------------------------------------------
+
+
+class CanvasWorkspaceCreate(BaseModel):
+    title: str = Field(default="Untitled Workspace", min_length=1, max_length=255)
+    state: dict[str, Any] = Field(default_factory=dict)
+
+
+class CanvasWorkspaceUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    state: Optional[dict[str, Any]] = None
+
+
+class CanvasWorkspaceResponse(BaseModel):
+    id: UUID
+    title: str
+    state: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
 # Upload Responses
 # ---------------------------------------------------------------------------
 
@@ -78,6 +121,58 @@ class MappingUploadResponse(BaseModel):
     status: str
     concept_count: int = 0
     errors: list[ValidationError] = []
+
+
+# ---------------------------------------------------------------------------
+# Scores Summary (GET .../scores/summary)
+# ---------------------------------------------------------------------------
+
+class ScoresSummaryResponse(BaseModel):
+    total_rows: int = 0
+    student_count: int = 0
+    question_count: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Mapping Retrieval (GET .../mapping)
+# ---------------------------------------------------------------------------
+
+class MappingItem(BaseModel):
+    question_id: str
+    concept_id: str
+    weight: float
+
+
+class MappingRetrieveResponse(BaseModel):
+    status: str = "ok"
+    concept_count: int = 0
+    mappings: list[MappingItem] = []
+
+
+# ---------------------------------------------------------------------------
+# Graph Versions (GET .../graph/versions)
+# ---------------------------------------------------------------------------
+
+class GraphVersionItem(BaseModel):
+    version: int
+    node_count: int = 0
+    edge_count: int = 0
+    annotation: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class GraphVersionListResponse(BaseModel):
+    versions: list[GraphVersionItem] = []
+
+
+# ---------------------------------------------------------------------------
+# Dashboard Alerts (GET .../dashboard/alerts)
+# ---------------------------------------------------------------------------
+
+class AlertsResponse(BaseModel):
+    alerts: list["AlertItem"] = []
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +410,6 @@ class StudentTokenItem(BaseModel):
     student_id: str
     token: str
     created_at: datetime
-    expires_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -513,6 +607,50 @@ class ExportListResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Study Content
+# ---------------------------------------------------------------------------
+
+class StudyContentCreateRequest(BaseModel):
+    content_type: str = Field(
+        ...,
+        pattern="^(audio|presentation|video_walkthrough)$",
+        description=(
+            "audio: ElevenLabs MP3 plus slides_data JSON. "
+            "presentation: transcript and slides_data only (no TTS; export JSON via GET .../download). "
+            "video_walkthrough: same MP3 pipeline as audio (no rendered video); "
+            "use transcript plus slides_data on the client if you want a slide-synced experience."
+        ),
+    )
+    title: str = Field(..., min_length=1, max_length=255)
+    focus_concepts: list[str] = []
+    include_weak_concepts: bool = True
+
+
+class StudyContentResponse(BaseModel):
+    id: UUID
+    exam_id: UUID
+    project_id: Optional[UUID] = None
+    content_type: str
+    title: str
+    source_context: dict[str, Any]
+    storage_key: Optional[str] = None
+    transcript: Optional[str] = None
+    slides_data: Optional[dict[str, Any]] = None
+    duration_seconds: Optional[int] = None
+    status: str
+    error_detail: Optional[str] = None
+    prompt_version: Optional[str] = None
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class StudyContentListResponse(BaseModel):
+    items: list[StudyContentResponse] = []
+
+
+# ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
 
@@ -521,6 +659,8 @@ class HealthResponse(BaseModel):
     service: str
     database: str = "unknown"
     anthropic: str = "unknown"
+    elevenlabs: str = "unknown"
+    object_storage: str = "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -576,6 +716,13 @@ class ChatMessageResponse(BaseModel):
 class ChatSendRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000)
     exam_id: Optional[UUID] = None
+
+    @field_validator("exam_id", mode="before")
+    @classmethod
+    def empty_exam_id_to_none(cls, v: Any) -> Any:
+        if v is None or v == "":
+            return None
+        return v
 
 
 class ChatSendResponse(BaseModel):

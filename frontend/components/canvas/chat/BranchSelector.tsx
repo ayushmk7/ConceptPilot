@@ -17,23 +17,23 @@ export function BranchSelector({ branches, currentIndex, onSelect }: BranchSelec
 
   return (
     <div className="flex items-center gap-1 px-2 py-1">
-      <GitBranch className="w-3 h-3 text-[#94A3B8]" />
+      <GitBranch className="w-3 h-3 text-muted-foreground" />
       <button
         onClick={() => onSelect(Math.max(0, currentIndex - 1))}
         disabled={currentIndex === 0}
-        className="p-0.5 hover:bg-[#E8EEF4] rounded disabled:opacity-30 transition-colors"
+        className="p-0.5 hover:bg-muted rounded disabled:opacity-30 transition-colors"
       >
-        <ChevronLeft className="w-3 h-3 text-[#4A5568]" />
+        <ChevronLeft className="w-3 h-3 text-secondary-text" />
       </button>
-      <span className="text-xs text-[#64748B] tabular-nums">
+      <span className="text-xs text-muted-foreground tabular-nums">
         {currentIndex + 1} / {branches.length}
       </span>
       <button
         onClick={() => onSelect(Math.min(branches.length - 1, currentIndex + 1))}
         disabled={currentIndex === branches.length - 1}
-        className="p-0.5 hover:bg-[#E8EEF4] rounded disabled:opacity-30 transition-colors"
+        className="p-0.5 hover:bg-muted rounded disabled:opacity-30 transition-colors"
       >
-        <ChevronRight className="w-3 h-3 text-[#4A5568]" />
+        <ChevronRight className="w-3 h-3 text-secondary-text" />
       </button>
     </div>
   );

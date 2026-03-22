@@ -6,13 +6,27 @@ import { InstructorLayout } from '@/components/InstructorLayout';
 import { useRouter } from 'next/navigation';
 import * as api from '@/lib/api';
 import type { UploadResult, ReadinessParams } from '@/lib/types';
+import { useExam } from '@/lib/exam-context';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
 export default function UploadWizard() {
+  const {
+    courses,
+    exams,
+    selectedCourseId,
+    selectedExamId,
+    setSelectedCourseId,
+    setSelectedExamId,
+    createCourse,
+    createExam,
+    loading: examLoading,
+  } = useExam();
   const [currentStep, setCurrentStep] = useState<Step>(1);
-  const [course, setCourse] = useState('');
-  const [exam, setExam] = useState('');
+  const [newCourseName, setNewCourseName] = useState('');
+  const [newExamName, setNewExamName] = useState('');
+  const [creatingCourse, setCreatingCourse] = useState(false);
+  const [creatingExam, setCreatingExam] = useState(false);
 
   // Step 2 — Scores
   const [scoresFile, setScoresFile] = useState<File | null>(null);
@@ -57,11 +71,12 @@ export default function UploadWizard() {
   const handleScoresUpload = async (file: File) => {
     const err = validateCsv(file);
     if (err) { setScoresError(err); return; }
+    if (!selectedExamId) return;
     setScoresFile(file);
     setScoresError(null);
     setScoresUploading(true);
     try {
-      const result = await api.uploadScores(file);
+      const result = await api.uploadScores(selectedExamId, file);
       if (result.errors.length > 0) {
         setScoresError(result.errors.join(', '));
       } else {
@@ -77,11 +92,12 @@ export default function UploadWizard() {
   const handleMappingUpload = async (file: File) => {
     const err = validateCsv(file);
     if (err) { setMappingError(err); return; }
+    if (!selectedExamId) return;
     setMappingFile(file);
     setMappingError(null);
     setMappingUploading(true);
     try {
-      const result = await api.uploadMapping(file);
+      const result = await api.uploadMapping(selectedExamId, file);
       setMappingResult(result);
     } catch {
       setMappingError('Upload failed. Please try again.');
@@ -91,38 +107,64 @@ export default function UploadWizard() {
   };
 
   const handleGraphUpload = async (file: File) => {
+    if (!selectedExamId) return;
     setGraphUploading(true);
     try {
-      const result = await api.uploadGraph(file);
+      const result = await api.uploadGraph(selectedExamId, file);
       setGraphResult(result);
-    } catch {
-      // handled
+    } catch (e) {
+      setGraphResult(null);
+      alert(e instanceof Error ? e.message : 'Graph upload failed');
     } finally {
       setGraphUploading(false);
     }
   };
 
   const handleAIGraph = async () => {
+    if (!selectedExamId) return;
     setGraphUploading(true);
     try {
-      const result = await api.generateGraphWithAI([]);
+      const result = await api.generateGraphWithAI(selectedExamId, []);
       setGraphResult(result);
-    } catch {
-      // handled
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'AI graph generation is not available.');
     } finally {
       setGraphUploading(false);
     }
   };
 
   const handleCompute = async () => {
+    if (!selectedExamId) return;
     setComputing(true);
     setComputeError(null);
     try {
-      await api.runCompute('e1', params);
+      await api.runCompute(selectedExamId, params);
       router.push('/dashboard');
     } catch {
       setComputeError('Compute failed. Please try again.');
       setComputing(false);
+    }
+  };
+
+  const handleCreateCourse = async () => {
+    if (!newCourseName.trim()) return;
+    setCreatingCourse(true);
+    try {
+      await createCourse(newCourseName.trim());
+      setNewCourseName('');
+    } finally {
+      setCreatingCourse(false);
+    }
+  };
+
+  const handleCreateExam = async () => {
+    if (!newExamName.trim()) return;
+    setCreatingExam(true);
+    try {
+      await createExam(newExamName.trim());
+      setNewExamName('');
+    } finally {
+      setCreatingExam(false);
     }
   };
 
@@ -144,21 +186,21 @@ export default function UploadWizard() {
                   onClick={() => step.num < currentStep && setCurrentStep(step.num as Step)}
                   className={`w-10 h-10 rounded-full flex items-center justify-center font-medium text-sm transition-all ${
                     step.num < currentStep
-                      ? 'bg-[#16A34A] text-white shadow-md shadow-[#16A34A]/20 cursor-pointer'
+                      ? 'bg-chart-4 text-white shadow-md shadow-chart-4/20 cursor-pointer'
                       : step.num === currentStep
-                      ? 'bg-gradient-to-br from-[#FFCB05] to-[#f0be00] text-[#00274C] shadow-md shadow-[#FFCB05]/30'
-                      : 'bg-[#E2E8F0] text-[#94A3B8] cursor-default'
+                      ? 'bg-gradient-to-br from-accent to-amber-400 text-primary shadow-md shadow-accent/30'
+                      : 'bg-border text-muted-foreground cursor-default'
                   }`}
                 >
                   {step.num < currentStep ? <Check className="w-5 h-5" /> : step.num}
                 </button>
-                <span className={`text-xs mt-2 text-center ${step.num === currentStep ? 'font-semibold text-[#00274C]' : 'text-[#4A5568]'}`}>
+                <span className={`text-xs mt-2 text-center ${step.num === currentStep ? 'font-semibold text-primary' : 'text-secondary-text'}`}>
                   {step.label}
                 </span>
-                <span className="text-[10px] text-[#94A3B8] mt-0.5 hidden md:block">{step.desc}</span>
+                <span className="text-[10px] text-muted-foreground mt-0.5 hidden md:block">{step.desc}</span>
               </div>
               {idx < steps.length - 1 && (
-                <div className={`h-0.5 flex-1 -mt-8 rounded-full ${step.num < currentStep ? 'bg-[#16A34A]' : 'bg-[#E2E8F0]'}`} />
+                <div className={`h-0.5 flex-1 -mt-8 rounded-full ${step.num < currentStep ? 'bg-chart-4' : 'bg-border'}`} />
               )}
             </div>
           ))}
@@ -168,31 +210,64 @@ export default function UploadWizard() {
           {/* Step 1 — Course & Exam */}
           {currentStep === 1 && (
             <div>
-              <h2 className="text-xl font-semibold text-[#00274C] mb-2">Course & Exam Selection</h2>
-              <p className="text-sm text-[#94A3B8] mb-6">Choose the course and exam you want to analyze.</p>
+              <h2 className="text-xl font-semibold text-primary mb-2">Course & Exam Selection</h2>
+              <p className="text-sm text-muted-foreground mb-6">Choose the course and exam you want to analyze.</p>
+              {examLoading ? (
+                <p className="text-sm text-muted-foreground">Loading courses…</p>
+              ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#4A5568] mb-1">Select Course <span className="text-[#DC2626]">*</span></label>
-                  <select value={course} onChange={(e) => setCourse(e.target.value)} className="w-full px-3 py-2 border border-[#CBD5E1] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00274C]/20 bg-white">
-                    <option value="">Choose a course...</option>
-                    <option value="eecs280">EECS 280</option>
-                    <option value="eecs281">EECS 281</option>
-                    <option value="new">+ Create New</option>
+                  <label className="block text-sm font-medium text-secondary-text mb-1">Course <span className="text-destructive">*</span></label>
+                  <select
+                    value={selectedCourseId ?? ''}
+                    onChange={(e) => setSelectedCourseId(e.target.value || null)}
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                  >
+                    <option value="">Choose a course…</option>
+                    {courses.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
                   </select>
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      value={newCourseName}
+                      onChange={(e) => setNewCourseName(e.target.value)}
+                      placeholder="New course name"
+                      className="flex-1 px-3 py-2 border border-input rounded-lg text-sm"
+                    />
+                    <button type="button" onClick={handleCreateCourse} disabled={creatingCourse || !newCourseName.trim()} className="btn-outline text-sm whitespace-nowrap">
+                      {creatingCourse ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create'}
+                    </button>
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#4A5568] mb-1">Select Exam <span className="text-[#DC2626]">*</span></label>
-                  <select value={exam} onChange={(e) => setExam(e.target.value)} className="w-full px-3 py-2 border border-[#CBD5E1] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00274C]/20 bg-white">
-                    <option value="">Choose an exam...</option>
-                    <option value="midterm1">Midterm 1</option>
-                    <option value="midterm2">Midterm 2</option>
-                    <option value="final">Final</option>
-                    <option value="new">+ Create New</option>
+                  <label className="block text-sm font-medium text-secondary-text mb-1">Exam <span className="text-destructive">*</span></label>
+                  <select
+                    value={selectedExamId ?? ''}
+                    onChange={(e) => setSelectedExamId(e.target.value || null)}
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                  >
+                    <option value="">Choose an exam…</option>
+                    {exams.map((ex) => (
+                      <option key={ex.id} value={ex.id}>{ex.name}</option>
+                    ))}
                   </select>
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      value={newExamName}
+                      onChange={(e) => setNewExamName(e.target.value)}
+                      placeholder="New exam name"
+                      className="flex-1 px-3 py-2 border border-input rounded-lg text-sm"
+                    />
+                    <button type="button" onClick={handleCreateExam} disabled={creatingExam || !newExamName.trim() || !selectedCourseId} className="btn-outline text-sm whitespace-nowrap">
+                      {creatingExam ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create'}
+                    </button>
+                  </div>
                 </div>
               </div>
+              )}
               <div className="mt-8 flex justify-end">
-                <button onClick={() => setCurrentStep(2)} disabled={!course || !exam} className="btn-primary">Next</button>
+                <button onClick={() => setCurrentStep(2)} disabled={!selectedCourseId || !selectedExamId} className="btn-primary">Next</button>
               </div>
             </div>
           )}
@@ -200,53 +275,53 @@ export default function UploadWizard() {
           {/* Step 2 — Scores */}
           {currentStep === 2 && (
             <div>
-              <h2 className="text-xl font-semibold text-[#00274C] mb-2">Upload Scores</h2>
-              <p className="text-sm text-[#94A3B8] mb-6">Upload a CSV file with student exam scores.</p>
+              <h2 className="text-xl font-semibold text-primary mb-2">Upload Scores</h2>
+              <p className="text-sm text-muted-foreground mb-6">Upload a CSV file with student exam scores.</p>
 
               {scoresError && (
-                <div className="mb-4 border border-[#DC2626]/20 bg-[#FEF2F2] rounded-xl p-4 flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-[#DC2626] mt-0.5 flex-shrink-0" />
+                <div className="mb-4 border border-destructive/20 bg-destructive/10 rounded-xl p-4 flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="text-sm text-[#DC2626]">{scoresError}</p>
+                    <p className="text-sm text-destructive">{scoresError}</p>
                   </div>
-                  <button onClick={() => setScoresError(null)} className="p-0.5"><X className="w-4 h-4 text-[#DC2626]" /></button>
+                  <button onClick={() => setScoresError(null)} className="p-0.5"><X className="w-4 h-4 text-destructive" /></button>
                 </div>
               )}
 
               {scoresUploading ? (
                 <div className="text-center py-12">
-                  <Loader2 className="w-8 h-8 text-[#00274C] animate-spin mx-auto mb-3" />
-                  <p className="text-sm text-[#4A5568]">Uploading and validating {scoresFile?.name}...</p>
+                  <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-3" />
+                  <p className="text-sm text-secondary-text">Uploading and validating {scoresFile?.name}...</p>
                 </div>
               ) : !scoresResult ? (
                 <div
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, handleScoresUpload)}
                   onClick={() => scoresRef.current?.click()}
-                  className="group border-2 border-dashed border-[#CBD5E1] rounded-xl p-12 text-center cursor-pointer hover:border-[#00274C]/40 transition-colors"
+                  className="group border-2 border-dashed border-input rounded-xl p-12 text-center cursor-pointer hover:border-primary/40 transition-colors"
                 >
                   <input ref={scoresRef} type="file" accept=".csv" className="hidden" onChange={(e) => e.target.files?.[0] && handleScoresUpload(e.target.files[0])} />
-                  <div className="w-16 h-16 rounded-2xl bg-[#E8EEF4] flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                    <CloudUpload className="w-8 h-8 text-[#00274C]" />
+                  <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <CloudUpload className="w-8 h-8 text-primary" />
                   </div>
-                  <p className="text-sm text-[#4A5568] mb-1">Drop scores CSV here or click to browse</p>
-                  <p className="text-xs text-[#94A3B8]">CSV files up to 10MB</p>
+                  <p className="text-sm text-secondary-text mb-1">Drop scores CSV here or click to browse</p>
+                  <p className="text-xs text-muted-foreground">CSV files up to 10MB</p>
                 </div>
               ) : (
-                <div className="border border-[#16A34A]/20 rounded-xl p-6 bg-[#16A34A]/5">
+                <div className="border border-chart-4/20 rounded-xl p-6 bg-chart-4/5">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#16A34A] flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-chart-4 flex items-center justify-center flex-shrink-0">
                       <Check className="w-4 h-4 text-white" />
                     </div>
                     <div className="flex-1">
-                      <p className="font-medium text-[#1A1A2E]">Scores uploaded successfully</p>
-                      <div className="mt-2 text-sm text-[#4A5568] space-y-1">
+                      <p className="font-medium text-foreground">Scores uploaded successfully</p>
+                      <div className="mt-2 text-sm text-secondary-text space-y-1">
                         <p>File: {scoresResult.filename}</p>
                         <p>Rows: {scoresResult.rowCount}</p>
                         <p>Columns: {scoresResult.columnCount}</p>
                       </div>
                     </div>
-                    <button onClick={() => { setScoresResult(null); setScoresFile(null); }} className="text-xs text-[#94A3B8] hover:text-[#4A5568]">Replace</button>
+                    <button onClick={() => { setScoresResult(null); setScoresFile(null); }} className="text-xs text-muted-foreground hover:text-secondary-text">Replace</button>
                   </div>
                 </div>
               )}
@@ -260,59 +335,59 @@ export default function UploadWizard() {
           {/* Step 3 — Mapping */}
           {currentStep === 3 && (
             <div>
-              <h2 className="text-xl font-semibold text-[#00274C] mb-2">Upload Mapping</h2>
-              <p className="text-sm text-[#94A3B8] mb-6">Map each question to one or more concepts.</p>
+              <h2 className="text-xl font-semibold text-primary mb-2">Upload Mapping</h2>
+              <p className="text-sm text-muted-foreground mb-6">Map each question to one or more concepts.</p>
 
               {mappingError && (
-                <div className="mb-4 border border-[#DC2626]/20 bg-[#FEF2F2] rounded-xl p-4 flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-[#DC2626] mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-[#DC2626] flex-1">{mappingError}</p>
-                  <button onClick={() => setMappingError(null)} className="p-0.5"><X className="w-4 h-4 text-[#DC2626]" /></button>
+                <div className="mb-4 border border-destructive/20 bg-destructive/10 rounded-xl p-4 flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-destructive flex-1">{mappingError}</p>
+                  <button onClick={() => setMappingError(null)} className="p-0.5"><X className="w-4 h-4 text-destructive" /></button>
                 </div>
               )}
 
               {mappingUploading ? (
                 <div className="text-center py-12">
-                  <Loader2 className="w-8 h-8 text-[#00274C] animate-spin mx-auto mb-3" />
-                  <p className="text-sm text-[#4A5568]">Uploading and validating {mappingFile?.name}...</p>
+                  <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-3" />
+                  <p className="text-sm text-secondary-text">Uploading and validating {mappingFile?.name}...</p>
                 </div>
               ) : !mappingResult ? (
                 <div
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, handleMappingUpload)}
                   onClick={() => mappingRef.current?.click()}
-                  className="group border-2 border-dashed border-[#CBD5E1] rounded-xl p-12 text-center cursor-pointer hover:border-[#00274C]/40 transition-colors"
+                  className="group border-2 border-dashed border-input rounded-xl p-12 text-center cursor-pointer hover:border-primary/40 transition-colors"
                 >
                   <input ref={mappingRef} type="file" accept=".csv" className="hidden" onChange={(e) => e.target.files?.[0] && handleMappingUpload(e.target.files[0])} />
-                  <div className="w-16 h-16 rounded-2xl bg-[#E8EEF4] flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                    <CloudUpload className="w-8 h-8 text-[#00274C]" />
+                  <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <CloudUpload className="w-8 h-8 text-primary" />
                   </div>
-                  <p className="text-sm text-[#4A5568] mb-1">Drop mapping CSV here or click to browse</p>
-                  <p className="text-xs text-[#94A3B8]">CSV files up to 10MB</p>
+                  <p className="text-sm text-secondary-text mb-1">Drop mapping CSV here or click to browse</p>
+                  <p className="text-xs text-muted-foreground">CSV files up to 10MB</p>
                 </div>
               ) : (
                 <div>
-                  <div className="border border-[#16A34A]/20 rounded-xl p-6 bg-[#16A34A]/5">
+                  <div className="border border-chart-4/20 rounded-xl p-6 bg-chart-4/5">
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[#16A34A] flex items-center justify-center flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-chart-4 flex items-center justify-center flex-shrink-0">
                         <Check className="w-4 h-4 text-white" />
                       </div>
                       <div className="flex-1">
-                        <p className="font-medium text-[#1A1A2E]">Mapping uploaded successfully</p>
-                        <div className="mt-2 text-sm text-[#4A5568] space-y-1">
+                        <p className="font-medium text-foreground">Mapping uploaded successfully</p>
+                        <div className="mt-2 text-sm text-secondary-text space-y-1">
                           <p>File: {mappingResult.filename}</p>
                           <p>Questions mapped: {mappingResult.rowCount}</p>
                         </div>
                       </div>
-                      <button onClick={() => { setMappingResult(null); setMappingFile(null); }} className="text-xs text-[#94A3B8] hover:text-[#4A5568]">Replace</button>
+                      <button onClick={() => { setMappingResult(null); setMappingFile(null); }} className="text-xs text-muted-foreground hover:text-secondary-text">Replace</button>
                     </div>
                   </div>
                   {mappingResult.warnings.length > 0 && (
-                    <div className="mt-4 border border-[#F59E0B]/20 bg-[#F59E0B]/5 rounded-xl p-4">
+                    <div className="mt-4 border border-chart-3/20 bg-chart-3/5 rounded-xl p-4">
                       {mappingResult.warnings.map((w, i) => (
                         <div key={i} className="flex items-start gap-2">
-                          <AlertCircle className="w-5 h-5 text-[#F59E0B] mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-[#4A5568]">{w}</p>
+                          <AlertCircle className="w-5 h-5 text-chart-3 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-secondary-text">{w}</p>
                         </div>
                       ))}
                     </div>
@@ -329,65 +404,65 @@ export default function UploadWizard() {
           {/* Step 4 — Graph */}
           {currentStep === 4 && (
             <div>
-              <h2 className="text-xl font-semibold text-[#00274C] mb-2">Concept Graph</h2>
-              <p className="text-sm text-[#94A3B8] mb-6">Define prerequisite relationships between concepts.</p>
+              <h2 className="text-xl font-semibold text-primary mb-2">Concept Graph</h2>
+              <p className="text-sm text-muted-foreground mb-6">Define prerequisite relationships between concepts.</p>
               <div className="grid grid-cols-2 gap-4 mb-6">
-                <div onClick={() => setGraphOption('upload')} className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${graphOption === 'upload' ? 'border-[#00274C] bg-[#E8EEF4]' : 'border-[#E2E8F0] hover:border-[#CBD5E1]'}`}>
-                  <div className="font-medium text-[#1A1A2E] mb-2">Upload Graph File</div>
-                  <p className="text-sm text-[#4A5568]">Upload a CSV file with prerequisite edges</p>
+                <div onClick={() => setGraphOption('upload')} className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${graphOption === 'upload' ? 'border-primary bg-muted' : 'border-border hover:border-input'}`}>
+                  <div className="font-medium text-foreground mb-2">Upload Graph File</div>
+                  <p className="text-sm text-secondary-text">Upload a JSON file with nodes and edges</p>
                 </div>
-                <div onClick={() => setGraphOption('ai')} className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${graphOption === 'ai' ? 'border-[#00274C] bg-[#E8EEF4]' : 'border-[#E2E8F0] hover:border-[#CBD5E1]'}`}>
-                  <div className="font-medium text-[#1A1A2E] mb-2">Generate with AI</div>
-                  <p className="text-sm text-[#4A5568]">Let AI suggest prerequisite relationships</p>
+                <div onClick={() => setGraphOption('ai')} className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${graphOption === 'ai' ? 'border-primary bg-muted' : 'border-border hover:border-input'}`}>
+                  <div className="font-medium text-foreground mb-2">Generate with AI</div>
+                  <p className="text-sm text-secondary-text">Let AI suggest prerequisite relationships</p>
                 </div>
               </div>
 
               {graphUploading ? (
                 <div className="text-center py-12">
-                  <Loader2 className="w-8 h-8 text-[#00274C] animate-spin mx-auto mb-3" />
-                  <p className="text-sm text-[#4A5568]">{graphOption === 'ai' ? 'Generating concept graph with AI...' : 'Uploading graph...'}</p>
+                  <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-3" />
+                  <p className="text-sm text-secondary-text">{graphOption === 'ai' ? 'Generating concept graph with AI...' : 'Uploading graph...'}</p>
                 </div>
               ) : graphOption === 'upload' && !graphResult ? (
                 <div
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => { e.preventDefault(); e.dataTransfer.files[0] && handleGraphUpload(e.dataTransfer.files[0]); }}
                   onClick={() => graphRef.current?.click()}
-                  className="group border-2 border-dashed border-[#CBD5E1] rounded-xl p-12 text-center cursor-pointer hover:border-[#00274C]/40 transition-colors"
+                  className="group border-2 border-dashed border-input rounded-xl p-12 text-center cursor-pointer hover:border-primary/40 transition-colors"
                 >
-                  <input ref={graphRef} type="file" accept=".csv" className="hidden" onChange={(e) => e.target.files?.[0] && handleGraphUpload(e.target.files[0])} />
-                  <div className="w-16 h-16 rounded-2xl bg-[#E8EEF4] flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                    <CloudUpload className="w-8 h-8 text-[#00274C]" />
+                  <input ref={graphRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => e.target.files?.[0] && handleGraphUpload(e.target.files[0])} />
+                  <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <CloudUpload className="w-8 h-8 text-primary" />
                   </div>
-                  <p className="text-sm text-[#4A5568] mb-1">Drop graph CSV here or click to browse</p>
-                  <p className="text-xs text-[#94A3B8]">CSV files up to 10MB</p>
+                  <p className="text-sm text-secondary-text mb-1">Drop graph JSON here or click to browse</p>
+                  <p className="text-xs text-muted-foreground">JSON with nodes and edges (see API docs)</p>
                 </div>
               ) : graphOption === 'ai' && !graphResult ? (
-                <button onClick={handleAIGraph} className="w-full btn-accent py-3">Generate Edges with AI</button>
+                <button onClick={handleAIGraph} className="w-full btn-accent py-3">Try AI (not available)</button>
               ) : null}
 
               {graphResult && (
                 <div className="mt-6 card-elevated p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <p className="font-medium text-[#1A1A2E]">Graph Preview</p>
-                    <button onClick={() => setGraphResult(null)} className="text-xs text-[#94A3B8] hover:text-[#4A5568]">Replace</button>
+                    <p className="font-medium text-foreground">Graph Preview</p>
+                    <button onClick={() => setGraphResult(null)} className="text-xs text-muted-foreground hover:text-secondary-text">Replace</button>
                   </div>
-                  <div className="bg-[#F8FAFC] rounded-xl p-6 border border-[#E2E8F0]">
-                    <svg viewBox="0 0 400 200" className="w-full">
-                      <defs><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#CBD5E1" /></marker></defs>
-                      <line x1="80" y1="50" x2="180" y2="100" stroke="#CBD5E1" strokeWidth="2" markerEnd="url(#arrowhead)" />
-                      <line x1="80" y1="150" x2="180" y2="100" stroke="#CBD5E1" strokeWidth="2" markerEnd="url(#arrowhead)" />
-                      <line x1="220" y1="100" x2="320" y2="100" stroke="#CBD5E1" strokeWidth="2" markerEnd="url(#arrowhead)" />
-                      <circle cx="80" cy="50" r="25" fill="#E8EEF4" stroke="#00274C" strokeWidth="2" />
-                      <text x="80" y="55" textAnchor="middle" fontSize="11" fill="#00274C">Basics</text>
-                      <circle cx="80" cy="150" r="25" fill="#E8EEF4" stroke="#00274C" strokeWidth="2" />
-                      <text x="80" y="155" textAnchor="middle" fontSize="11" fill="#00274C">Arrays</text>
-                      <circle cx="200" cy="100" r="25" fill="#E8EEF4" stroke="#00274C" strokeWidth="2" />
-                      <text x="200" y="105" textAnchor="middle" fontSize="11" fill="#00274C">Pointers</text>
-                      <circle cx="320" cy="100" r="25" fill="#FFCB05" stroke="#00274C" strokeWidth="2" />
-                      <text x="320" y="105" textAnchor="middle" fontSize="11" fill="#00274C">Classes</text>
+                  <div className="bg-muted/50 rounded-xl p-6 border border-border">
+                    <svg viewBox="0 0 400 200" className="w-full text-input">
+                      <defs><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="currentColor" /></marker></defs>
+                      <line x1="80" y1="50" x2="180" y2="100" stroke="currentColor" strokeWidth="2" markerEnd="url(#arrowhead)" />
+                      <line x1="80" y1="150" x2="180" y2="100" stroke="currentColor" strokeWidth="2" markerEnd="url(#arrowhead)" />
+                      <line x1="220" y1="100" x2="320" y2="100" stroke="currentColor" strokeWidth="2" markerEnd="url(#arrowhead)" />
+                      <circle cx="80" cy="50" r="25" fill="var(--light-blue-wash)" stroke="var(--primary)" strokeWidth="2" />
+                      <text x="80" y="55" textAnchor="middle" fontSize="11" fill="var(--primary)">Basics</text>
+                      <circle cx="80" cy="150" r="25" fill="var(--light-blue-wash)" stroke="var(--primary)" strokeWidth="2" />
+                      <text x="80" y="155" textAnchor="middle" fontSize="11" fill="var(--primary)">Arrays</text>
+                      <circle cx="200" cy="100" r="25" fill="var(--light-blue-wash)" stroke="var(--primary)" strokeWidth="2" />
+                      <text x="200" y="105" textAnchor="middle" fontSize="11" fill="var(--primary)">Pointers</text>
+                      <circle cx="320" cy="100" r="25" fill="var(--accent)" stroke="var(--primary)" strokeWidth="2" />
+                      <text x="320" y="105" textAnchor="middle" fontSize="11" fill="var(--primary)">Classes</text>
                     </svg>
                   </div>
-                  <p className="text-sm text-[#4A5568] mt-2">{graphResult.nodeCount} concepts, {graphResult.edgeCount} edges</p>
+                  <p className="text-sm text-secondary-text mt-2">{graphResult.nodeCount} concepts, {graphResult.edgeCount} edges</p>
                 </div>
               )}
 
@@ -401,8 +476,8 @@ export default function UploadWizard() {
           {/* Step 5 — Parameters & Compute */}
           {currentStep === 5 && (
             <div>
-              <h2 className="text-xl font-semibold text-[#00274C] mb-2">Parameters & Compute</h2>
-              <p className="text-sm text-[#94A3B8] mb-6">Fine-tune the readiness model parameters before computing.</p>
+              <h2 className="text-xl font-semibold text-primary mb-2">Parameters & Compute</h2>
+              <p className="text-sm text-muted-foreground mb-6">Fine-tune the readiness model parameters before computing.</p>
               <div className="space-y-6">
                 {([
                   { key: 'alpha' as const, label: 'Alpha (direct readiness weight)' },
@@ -412,42 +487,42 @@ export default function UploadWizard() {
                 ]).map((p) => (
                   <div key={p.key}>
                     <div className="flex justify-between mb-2">
-                      <label className="text-sm font-medium text-[#4A5568]">{p.label}</label>
-                      <span className="text-sm text-[#00274C] bg-[#E8EEF4] px-2 py-0.5 rounded font-medium">{params[p.key].toFixed(1)}</span>
+                      <label className="text-sm font-medium text-secondary-text">{p.label}</label>
+                      <span className="text-sm text-primary bg-muted px-2 py-0.5 rounded font-medium">{params[p.key].toFixed(1)}</span>
                     </div>
                     <input
                       type="range" min="0" max="1" step="0.1"
                       value={params[p.key]}
                       onChange={(e) => setParams({ ...params, [p.key]: parseFloat(e.target.value) })}
-                      className="w-full accent-[#00274C]"
+                      className="w-full accent-primary"
                     />
                   </div>
                 ))}
                 <div>
-                  <label className="block text-sm font-medium text-[#4A5568] mb-2">K (cluster count)</label>
+                  <label className="block text-sm font-medium text-secondary-text mb-2">K (cluster count)</label>
                   <input
                     type="number" min="2" max="10"
                     value={params.k}
                     onChange={(e) => setParams({ ...params, k: parseInt(e.target.value) || 3 })}
-                    className="w-full px-3 py-2 border border-[#CBD5E1] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00274C]/20"
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
               </div>
 
               {computeError && (
-                <div className="mt-4 border border-[#DC2626]/20 bg-[#FEF2F2] rounded-xl p-4 flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-[#DC2626] mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-[#DC2626]">{computeError}</p>
+                <div className="mt-4 border border-destructive/20 bg-destructive/10 rounded-xl p-4 flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-destructive">{computeError}</p>
                 </div>
               )}
 
               {computing ? (
                 <div className="mt-8 text-center py-6">
-                  <div className="w-14 h-14 rounded-2xl bg-[#E8EEF4] flex items-center justify-center mx-auto mb-4">
-                    <Loader2 className="w-7 h-7 text-[#00274C] animate-spin" />
+                  <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+                    <Loader2 className="w-7 h-7 text-primary animate-spin" />
                   </div>
-                  <p className="text-sm text-[#4A5568]">Computing readiness analytics...</p>
-                  <p className="text-xs text-[#94A3B8] mt-1">This may take a moment</p>
+                  <p className="text-sm text-secondary-text">Computing readiness analytics...</p>
+                  <p className="text-xs text-muted-foreground mt-1">This may take a moment</p>
                 </div>
               ) : (
                 <div className="mt-8 flex justify-between">
