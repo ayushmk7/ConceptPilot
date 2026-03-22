@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -393,6 +393,18 @@ class StudyPlanItem(BaseModel):
     explanation: str
 
 
+class StudentContextResponse(BaseModel):
+    """Bootstrap payload for anonymous student workspace UI."""
+
+    exam_id: UUID
+    course_id: UUID
+    course_name: str
+    exam_name: str
+    shared_student_id: str
+    canvas_project_id: UUID
+    study_project_id: UUID
+
+
 class StudentReportResponse(BaseModel):
     student_id: str
     exam_id: UUID
@@ -613,17 +625,21 @@ class ExportListResponse(BaseModel):
 class StudyContentCreateRequest(BaseModel):
     content_type: str = Field(
         ...,
-        pattern="^(audio|presentation|video_walkthrough)$",
+        pattern="^(audio|presentation|video_walkthrough|podcast)$",
         description=(
             "audio: ElevenLabs MP3 plus slides_data JSON. "
             "presentation: transcript and slides_data only (no TTS; export JSON via GET .../download). "
             "video_walkthrough: same MP3 pipeline as audio (no rendered video); "
+            "podcast: dialogue-style script + ElevenLabs TTS. "
             "use transcript plus slides_data on the client if you want a slide-synced experience."
         ),
     )
     title: str = Field(..., min_length=1, max_length=255)
     focus_concepts: list[str] = []
     include_weak_concepts: bool = True
+    locale: str = ""
+    voice_id: str = ""
+    elevenlabs_model_id: str = ""
 
 
 class StudyContentResponse(BaseModel):
@@ -693,13 +709,6 @@ class ChatSessionCreate(BaseModel):
     title: str = ""
     surface: Literal["instructor", "student"] = "instructor"
     report_token: Optional[str] = None
-
-    @model_validator(mode="after")
-    def _student_requires_token(self) -> "ChatSessionCreate":
-        if self.surface == "student":
-            if not (self.report_token or "").strip():
-                raise ValueError("report_token is required when surface is student")
-        return self
 
 
 class ChatSessionResponse(BaseModel):

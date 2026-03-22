@@ -8,7 +8,8 @@ import {
   type CanvasChatSurface,
 } from '@/lib/canvas-api';
 import { useExam } from '@/lib/exam-context';
-import { getCachedStudentReport, getStoredStudentToken } from '@/lib/student-report';
+import { getCachedStudentReport } from '@/lib/student-report';
+import { useStudentBootstrapOptional } from '@/lib/student-context';
 
 export interface LocalMessage {
   role: 'user' | 'assistant';
@@ -34,8 +35,7 @@ interface UseStreamingChatReturn {
 /**
  * Hook that manages a chat session for a single ChatNode.
  *
- * On canvas with `?role=student`, uses the student chat lane when a report token
- * is present in localStorage; otherwise send fails with a clear error.
+ * On canvas with `?role=student`, uses the student workspace exam from `/student/context` (browser storage).
  */
 export function useStreamingChat(
   _nodeId: string,
@@ -44,17 +44,21 @@ export function useStreamingChat(
   const searchParams = useSearchParams();
   const { selectedExamId } = useExam();
   const isStudentCanvas = searchParams.get('role') === 'student';
-  const reportToken = typeof window !== 'undefined' ? getStoredStudentToken() : null;
   const cached = typeof window !== 'undefined' ? getCachedStudentReport() : null;
+  const boot = useStudentBootstrapOptional();
 
   const examIdForChat =
     options?.examId ??
-    (isStudentCanvas && cached?.exam_id ? String(cached.exam_id) : selectedExamId ?? undefined);
+    (isStudentCanvas && boot?.examId
+      ? boot.examId
+      : isStudentCanvas && cached?.exam_id
+        ? String(cached.exam_id)
+        : selectedExamId ?? undefined);
 
-  const surface: CanvasChatSurface =
-    isStudentCanvas && reportToken ? 'student' : 'instructor';
+  const surface: CanvasChatSurface = isStudentCanvas ? 'student' : 'instructor';
 
-  const studentCanvasBlocked = isStudentCanvas && !reportToken;
+  const studentCanvasBlocked =
+    isStudentCanvas && (boot?.loading || !!boot?.error || !String(examIdForChat ?? '').trim());
 
   const [messages, setMessages] = useState<LocalMessage[]>(
     options?.initialMessages ?? [],
@@ -66,15 +70,15 @@ export function useStreamingChat(
   const ensureSession = useCallback(async () => {
     if (sessionIdRef.current) return sessionIdRef.current;
     if (studentCanvasBlocked) {
-      throw new Error('Open your report link to enable chat on the student canvas.');
+      throw new Error('Load the student workspace from the student portal to enable chat on the student canvas.');
     }
     const session = await createChatSession(examIdForChat, {
       surface,
-      reportToken: surface === 'student' ? reportToken : null,
+      reportToken: null,
     });
     sessionIdRef.current = session.id;
     return session.id;
-  }, [examIdForChat, surface, reportToken, studentCanvasBlocked]);
+  }, [examIdForChat, surface, studentCanvasBlocked]);
 
   const send = useCallback(
     async (text: string, context?: string) => {
@@ -105,7 +109,7 @@ export function useStreamingChat(
             role: 'assistant',
             content:
               studentCanvasBlocked
-                ? 'Open your personal report link in this browser to use the student study assistant on the canvas.'
+                ? 'Open the student area in this browser so your workspace loads, then try again.'
                 : `*(Error — ${msg})*`,
           },
         ]);

@@ -1,18 +1,60 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { StudentLayout } from '@/components/StudentLayout';
 import { DotPattern } from '@/components/svg/DotPattern';
 import { BarChart3, AlertTriangle, BookOpen, TrendingUp, Headphones, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { readinessColorFromScore } from '@/lib/theme-colors';
-import { MOCK_STUDENT_CONCEPTS } from '@/lib/mock-data';
+import * as api from '@/lib/api';
+import { useStudentBootstrap } from '@/lib/student-context';
+import type { ConceptReadiness } from '@/lib/types';
+import type { StudentReportResponse } from '@/lib/api-types';
 
 export default function StudentDashboard() {
-  const concepts = MOCK_STUDENT_CONCEPTS;
+  const { courseName, examName, loading: bootLoading, error: bootErr } = useStudentBootstrap();
+  const [concepts, setConcepts] = useState<ConceptReadiness[]>([]);
+  const [studyPlanSteps, setStudyPlanSteps] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (bootLoading || bootErr) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const r: StudentReportResponse = await api.fetchOpenStudentReport();
+        if (!cancelled) {
+          setConcepts(api.studentReportToConcepts(r));
+          setStudyPlanSteps(r.study_plan?.length ?? 0);
+          setErr(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setConcepts([]);
+          setStudyPlanSteps(0);
+          setErr(e && typeof e === 'object' && 'message' in e ? String((e as { message: string }).message) : 'Failed to load');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bootLoading, bootErr]);
 
   const overallReadiness =
     concepts.length > 0 ? concepts.reduce((sum, c) => sum + c.readiness, 0) / concepts.length : 0;
   const weakCount = concepts.filter((c) => c.readiness < 0.6).length;
+
+  const subtitle =
+    courseName && examName
+      ? `${courseName} • ${examName} • Your readiness snapshot.`
+      : 'Your readiness snapshot.';
 
   return (
     <StudentLayout>
@@ -22,7 +64,9 @@ export default function StudentDashboard() {
         <div className="relative">
           <div className="mb-8 animate-fade-in">
             <h1 className="text-2xl font-semibold text-primary mb-1">Welcome back</h1>
-            <p className="text-sm text-muted-foreground">EECS 280 &bull; Midterm 1 &bull; Here&apos;s your readiness snapshot.</p>
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
+            {bootErr && <p className="text-sm text-destructive mt-2">{bootErr}</p>}
+            {err && !bootErr && <p className="text-sm text-destructive mt-2">{err}</p>}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 animate-fade-in-up delay-100">
@@ -32,7 +76,9 @@ export default function StudentDashboard() {
                   <TrendingUp className="w-4.5 h-4.5 text-chart-5" />
                 </div>
               </div>
-              <div className="text-2xl font-semibold text-foreground">{(overallReadiness * 100).toFixed(0)}%</div>
+              <div className="text-2xl font-semibold text-foreground">
+                {loading ? '—' : `${(overallReadiness * 100).toFixed(0)}%`}
+              </div>
               <div className="text-xs text-muted-foreground mt-0.5">Overall Readiness</div>
             </div>
             <div className="card-elevated p-5">
@@ -41,7 +87,7 @@ export default function StudentDashboard() {
                   <BarChart3 className="w-4.5 h-4.5 text-chart-4" />
                 </div>
               </div>
-              <div className="text-2xl font-semibold text-foreground">{concepts.length}</div>
+              <div className="text-2xl font-semibold text-foreground">{loading ? '—' : concepts.length}</div>
               <div className="text-xs text-muted-foreground mt-0.5">Concepts Assessed</div>
             </div>
             <div className="card-elevated p-5">
@@ -50,7 +96,7 @@ export default function StudentDashboard() {
                   <AlertTriangle className="w-4.5 h-4.5 text-chart-3" />
                 </div>
               </div>
-              <div className="text-2xl font-semibold text-foreground">{weakCount}</div>
+              <div className="text-2xl font-semibold text-foreground">{loading ? '—' : weakCount}</div>
               <div className="text-xs text-muted-foreground mt-0.5">Areas to Improve</div>
             </div>
             <div className="card-elevated p-5">
@@ -59,7 +105,7 @@ export default function StudentDashboard() {
                   <BookOpen className="w-4.5 h-4.5 text-chart-5" />
                 </div>
               </div>
-              <div className="text-2xl font-semibold text-foreground">4</div>
+              <div className="text-2xl font-semibold text-foreground">{loading ? '—' : studyPlanSteps}</div>
               <div className="text-xs text-muted-foreground mt-0.5">Study Plan Steps</div>
             </div>
           </div>
@@ -70,22 +116,30 @@ export default function StudentDashboard() {
                 <h2 className="text-lg font-semibold text-primary">Concept Readiness</h2>
                 <Link href="/student/report" className="text-sm text-chart-5 hover:underline">View full report</Link>
               </div>
-              <div className="space-y-3">
-                {[...concepts].sort((a, b) => a.readiness - b.readiness).map((concept) => (
-                  <div key={concept.concept} className="flex items-center justify-between py-2 border-b border-muted last:border-0">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: readinessColorFromScore(concept.readiness) }} />
-                      <span className="text-sm font-medium text-foreground">{concept.concept}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-28 h-2 bg-border rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all" style={{ width: `${concept.readiness * 100}%`, backgroundColor: readinessColorFromScore(concept.readiness) }} />
+              {concepts.length === 0 && !loading ? (
+                <p className="text-sm text-muted-foreground py-4">
+                  No readiness data yet. Upload scores, mapping, and a concept graph from{' '}
+                  <Link href="/student/upload" className="text-chart-5 hover:underline">Upload</Link>
+                  , then run compute.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {[...concepts].sort((a, b) => a.readiness - b.readiness).map((concept) => (
+                    <div key={concept.concept} className="flex items-center justify-between py-2 border-b border-muted last:border-0">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: readinessColorFromScore(concept.readiness) }} />
+                        <span className="text-sm font-medium text-foreground">{concept.concept}</span>
                       </div>
-                      <span className="text-sm font-medium text-foreground w-10 text-right">{(concept.readiness * 100).toFixed(0)}%</span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-28 h-2 bg-border rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${concept.readiness * 100}%`, backgroundColor: readinessColorFromScore(concept.readiness) }} />
+                        </div>
+                        <span className="text-sm font-medium text-foreground w-10 text-right">{(concept.readiness * 100).toFixed(0)}%</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="md:col-span-2 space-y-6">
@@ -115,8 +169,8 @@ export default function StudentDashboard() {
                       <TrendingUp className="w-4 h-4 text-chart-3" />
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-foreground">Upload a Test</div>
-                      <div className="text-xs text-muted-foreground">Analyze another exam</div>
+                      <div className="text-sm font-medium text-foreground">Upload</div>
+                      <div className="text-xs text-muted-foreground">Add scores, mapping, or study materials</div>
                     </div>
                   </Link>
                   <Link href="/canvas?role=student" className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/50 transition-colors">
@@ -142,6 +196,9 @@ export default function StudentDashboard() {
                       </span>
                     </div>
                   ))}
+                  {concepts.filter((c) => c.readiness < 0.6).length === 0 && !loading && (
+                    <p className="text-sm text-muted-foreground">No weak concepts below threshold yet.</p>
+                  )}
                 </div>
                 <Link href="/student/study-plan" className="block mt-4 text-center text-sm text-chart-5 hover:underline">
                   Start studying

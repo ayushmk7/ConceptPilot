@@ -3,6 +3,7 @@
  */
 
 import { apiFetch } from './api';
+import { readStudentWorkspace } from './student-workspace-storage';
 
 /* ------------------------------------------------------------------ */
 /*  Workspace API (backend)                                          */
@@ -122,9 +123,15 @@ export function createChatSession(
   if (surface === 'student' && opts?.reportToken) {
     body.report_token = opts.reportToken;
   }
+  const headers = new Headers();
+  if (surface === 'student' && !opts?.reportToken) {
+    const wid = readStudentWorkspace()?.examId;
+    if (wid) headers.set('X-Student-Exam-Id', wid);
+  }
   return apiFetch<ChatSession>('/chat/sessions', {
     method: 'POST',
     jsonBody: body,
+    headers: headers.has('X-Student-Exam-Id') ? headers : undefined,
   });
 }
 
@@ -139,6 +146,11 @@ export function sendMessage(
   opts?: { surface?: CanvasChatSurface; reportToken?: string | null },
 ) {
   const surface = opts?.surface ?? 'instructor';
+  const headers = new Headers();
+  if (surface === 'student' && !opts?.reportToken) {
+    const wid = readStudentWorkspace()?.examId;
+    if (wid) headers.set('X-Student-Exam-Id', wid);
+  }
   return apiFetch<ChatSendResponse>(`/chat/sessions/${encodeURIComponent(sessionId)}/messages`, {
     method: 'POST',
     jsonBody: {
@@ -146,6 +158,7 @@ export function sendMessage(
       exam_id: examId ?? null,
       surface,
     },
+    headers: headers.has('X-Student-Exam-Id') ? headers : undefined,
   });
 }
 

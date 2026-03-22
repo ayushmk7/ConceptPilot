@@ -78,7 +78,7 @@ export function ExamProvider({ children }: { children: React.ReactNode }) {
         setSelectedExamIdState(null);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load courses');
+      setError(api.getFetchErrorMessage(e, 'Failed to load courses'));
     } finally {
       setLoading(false);
     }

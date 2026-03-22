@@ -51,20 +51,10 @@ async def _call_claude_content_outline(
     focus_concepts: list[str],
     weak_concepts: list[str],
 ) -> dict[str, Any]:
-    if not settings.ANTHROPIC_API_KEY:
-        joined = ", ".join(focus_concepts or weak_concepts or ["core concepts"])
-        transcript = (
-            f"This is a focused study guide for {exam_name}. "
-            f"Today we review: {joined}. Start with definitions, then solve one worked example "
-            "for each concept, then self-check using two short questions."
+    if not (settings.ANTHROPIC_API_KEY or "").strip():
+        raise RuntimeError(
+            "Study content generation requires ANTHROPIC_API_KEY in the backend environment.",
         )
-        slides = {
-            "slides": [
-                {"title": "Learning goals", "bullets": [f"Review {joined}", "Build problem-solving confidence"]},
-                {"title": "Study sequence", "bullets": ["Warm-up concepts", "Worked examples", "Self-check"]},
-            ]
-        }
-        return {"transcript": transcript, "slides_data": slides}
 
     client = _get_client()
     focus_str = ", ".join(focus_concepts) if focus_concepts else "(none provided)"
@@ -73,13 +63,20 @@ async def _call_claude_content_outline(
         "You are an expert educator writing concise, high-signal study materials. "
         "Respond with valid JSON only."
     )
+    podcast_extra = ""
+    if content_type == "podcast":
+        podcast_extra = (
+            "\nFor podcast: write a two-host conversational script (Host A and Host B) that teaches the material; "
+            "still return a single transcript string with speaker labels. Slides optional (can be empty bullets).\n"
+        )
+
     user_prompt = f"""
 Generate study content for:
 - exam: {exam_name}
 - content_type: {content_type}
 - focus_concepts: {focus_str}
 - weak_concepts: {weak_str}
-
+{podcast_extra}
 Return JSON in this schema:
 {{
   "transcript": "string",
@@ -138,8 +135,11 @@ async def run_generation_for_content(content_id: UUID) -> None:
             content.status = "generating"
             await db.commit()
 
-            focus_concepts = list(content.source_context.get("focus_concepts", []))
-            include_weak = bool(content.source_context.get("include_weak_concepts", True))
+            ctx = content.source_context or {}
+            focus_concepts = list(ctx.get("focus_concepts", []))
+            include_weak = bool(ctx.get("include_weak_concepts", True))
+            voice_id = (ctx.get("voice_id") or "").strip() or None
+            model_id_el = (ctx.get("elevenlabs_model_id") or "").strip() or None
             weak_concepts: list[str] = []
             if include_weak:
                 weak_rows = await db.execute(
@@ -161,8 +161,12 @@ async def run_generation_for_content(content_id: UUID) -> None:
             content.slides_data = generated.get("slides_data")
             content.prompt_version = STUDY_SCRIPT_PROMPT_VERSION
 
-            if content.content_type in {"audio", "video_walkthrough"}:
-                audio_bytes = await synthesize_speech(transcript)
+            if content.content_type in {"audio", "video_walkthrough", "podcast"}:
+                audio_bytes = await synthesize_speech(
+                    transcript,
+                    voice_id=voice_id,
+                    model_id=model_id_el,
+                )
                 local_path = _local_audio_path(content.id)
                 local_path.write_bytes(audio_bytes)
                 content.duration_seconds = _estimate_duration_seconds(transcript)

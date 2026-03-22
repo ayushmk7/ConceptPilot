@@ -20,12 +20,14 @@ from app.routers import (
     compute,
     courses,
     dashboard,
+    elevenlabs_api,
     exams,
     export,
     graph,
     parameters,
     projects,
     reports,
+    student,
     study_content,
     upload,
 )
@@ -152,6 +154,8 @@ app.include_router(parameters.router)
 app.include_router(ai_suggestions.router)
 app.include_router(export.router)
 app.include_router(chat.router)
+app.include_router(student.router)
+app.include_router(elevenlabs_api.router)
 app.include_router(projects.router)
 app.include_router(study_content.router)
 app.include_router(canvas_workspaces.router)

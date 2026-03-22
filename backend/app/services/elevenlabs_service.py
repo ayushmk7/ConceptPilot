@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 
@@ -45,17 +46,25 @@ async def check_api_reachable() -> tuple[bool, str]:
         return False, f"error: {str(exc)[:80]}"
 
 
-async def synthesize_speech(text: str) -> bytes:
+async def synthesize_speech(
+    text: str,
+    *,
+    voice_id: str | None = None,
+    model_id: str | None = None,
+) -> bytes:
     """Synthesize speech with ElevenLabs and return MP3 bytes."""
     if not _is_configured():
         raise RuntimeError("ElevenLabs is not configured")
-    if not settings.ELEVENLABS_VOICE_ID:
-        raise RuntimeError("ELEVENLABS_VOICE_ID is required for speech synthesis")
+    vid = (voice_id or settings.ELEVENLABS_VOICE_ID or "").strip()
+    if not vid:
+        raise RuntimeError("ELEVENLABS_VOICE_ID is required for speech synthesis (or pass voice_id)")
 
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{settings.ELEVENLABS_VOICE_ID}"
+    mid = (model_id or settings.ELEVENLABS_MODEL_ID or "eleven_multilingual_v2").strip()
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{vid}"
     payload = {
         "text": text,
-        "model_id": settings.ELEVENLABS_MODEL_ID,
+        "model_id": mid,
     }
     headers = {
         "xi-api-key": settings.ELEVENLABS_API_KEY,
@@ -71,3 +80,40 @@ async def synthesize_speech(text: str) -> bytes:
             detail = resp.text[:200]
             raise RuntimeError(f"ElevenLabs synthesis failed ({resp.status_code}): {detail}")
         return resp.content
+
+
+async def list_voices() -> list[dict[str, Any]]:
+    """Return ElevenLabs voice metadata for UI pickers."""
+    if not _is_configured():
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(
+                "https://api.elevenlabs.io/v1/voices",
+                headers={"xi-api-key": settings.ELEVENLABS_API_KEY},
+            )
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+        voices = data.get("voices") or []
+        out: list[dict[str, Any]] = []
+        for v in voices:
+            if not isinstance(v, dict):
+                continue
+            vid = v.get("voice_id") or v.get("voiceId")
+            if not vid:
+                continue
+            labels = v.get("labels") or {}
+            lang = labels.get("language") or labels.get("accent") or ""
+            out.append(
+                {
+                    "voice_id": vid,
+                    "name": v.get("name") or vid,
+                    "category": v.get("category"),
+                    "language": lang,
+                }
+            )
+        return out
+    except Exception as exc:
+        logger.warning("ElevenLabs list_voices failed: %s", exc)
+        return []

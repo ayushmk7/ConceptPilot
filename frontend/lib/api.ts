@@ -23,6 +23,8 @@ import type {
   ReportConfig,
   ConceptGraphNode,
   ConceptGraphEdge,
+  GraphRetrieveResponse,
+  GraphExpandResponse,
   ApiError,
 } from './types';
 import type { StudentReportResponse } from './api-types';
@@ -37,8 +39,75 @@ import {
   COMPUTE_POLL_MAX_ATTEMPTS,
 } from './config';
 import { getReportConfigs as getReportConfigsList } from './report-config';
+import { readStudentWorkspace, writeStudentWorkspace } from './student-workspace-storage';
 
 export { API_BASE } from './config';
+
+/** Serialize concurrent bootstraps so parallel student API calls share one GET /student/context. */
+let studentWorkspaceBootstrapInflight: Promise<void> | null = null;
+
+/**
+ * Ensures localStorage has an exam id before any `/api/v1/student/*` call (except `/context`).
+ * The exam id is not part of the CSV — scores CSV uses `StudentID` per row; the header scopes the workspace.
+ */
+async function ensureStudentWorkspaceBeforeRequest(path: string, init: ApiFetchOptions): Promise<void> {
+  if (init.skipStudentWorkspaceHeader) return;
+  if (!path.startsWith('/api/v1/student/')) return;
+  const u = path.split('?')[0];
+  if (u === '/api/v1/student/context') return;
+  if (readStudentWorkspace()?.examId) return;
+
+  if (!studentWorkspaceBootstrapInflight) {
+    studentWorkspaceBootstrapInflight = (async () => {
+      if (readStudentWorkspace()?.examId) return;
+      const url = `${API_BASE}/api/v1/student/context`;
+      let res: Response;
+      try {
+        res = await fetch(url, { method: 'GET' });
+      } catch {
+        throw { status: 0, message: 'Network error — backend unreachable' } as ApiError;
+      }
+      if (!res.ok) {
+        let parsed: unknown = {};
+        const text = await res.text();
+        try {
+          parsed = text ? JSON.parse(text) : {};
+        } catch {
+          parsed = { detail: text || res.statusText };
+        }
+        throw {
+          status: res.status,
+          message: parseErrorMessage(parsed, res.statusText),
+        } as ApiError;
+      }
+      const ct = res.headers.get('content-type') ?? '';
+      if (!ct.includes('application/json')) {
+        throw { status: res.status, message: 'Unexpected response from student context' } as ApiError;
+      }
+      const r = (await res.json()) as {
+        exam_id: string;
+        course_id: string;
+        course_name: string;
+        exam_name: string;
+        canvas_project_id: string;
+        study_project_id: string;
+        shared_student_id: string;
+      };
+      writeStudentWorkspace({
+        examId: r.exam_id,
+        courseId: r.course_id,
+        courseName: r.course_name,
+        examName: r.exam_name,
+        canvasProjectId: r.canvas_project_id,
+        studyProjectId: r.study_project_id,
+        sharedStudentId: r.shared_student_id,
+      });
+    })().finally(() => {
+      studentWorkspaceBootstrapInflight = null;
+    });
+  }
+  await studentWorkspaceBootstrapInflight;
+}
 
 export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   /** When set, serializes to JSON and sends as body (unless `body` is also set). */
@@ -46,6 +115,8 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   body?: RequestInit['body'];
   /** Abort the request after this many milliseconds (browser has no default fetch timeout). */
   timeoutMs?: number;
+  /** Skip auto `X-Student-Exam-Id` for `GET /api/v1/student/context` bootstrap. */
+  skipStudentWorkspaceHeader?: boolean;
 }
 
 function parseErrorMessage(body: unknown, fallback: string): string {
@@ -64,9 +135,33 @@ function parseErrorMessage(body: unknown, fallback: string): string {
 /**
  * Unified fetch for JSON APIs.
  */
+/** Human-readable message from `apiFetch` throws (`ApiError`) or standard `Error`. */
+export function getFetchErrorMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'object' && e !== null && 'message' in e) {
+    const m = (e as { message: unknown }).message;
+    if (typeof m === 'string' && m.length > 0) return m;
+  }
+  return fallback;
+}
+
+function attachStudentWorkspaceHeader(path: string, headers: Headers, init: ApiFetchOptions) {
+  if (init.skipStudentWorkspaceHeader) return;
+  if (!path.startsWith('/api/v1/student/')) return;
+  const u = path.split('?')[0];
+  if (u === '/api/v1/student/context') return;
+  const id = readStudentWorkspace()?.examId;
+  if (id && !headers.has('X-Student-Exam-Id')) {
+    headers.set('X-Student-Exam-Id', id);
+  }
+}
+
 export async function apiFetch<T = unknown>(path: string, init: ApiFetchOptions = {}): Promise<T> {
-  const { jsonBody, timeoutMs, headers: initHeaders, body: initBody, signal: userSignal, ...rest } = init;
+  const { jsonBody, timeoutMs, headers: initHeaders, body: initBody, signal: userSignal, skipStudentWorkspaceHeader, ...rest } =
+    init;
+  await ensureStudentWorkspaceBeforeRequest(path, { ...init, skipStudentWorkspaceHeader });
   const headers = new Headers(initHeaders as HeadersInit);
+  attachStudentWorkspaceHeader(path, headers, { ...init, skipStudentWorkspaceHeader });
 
   let body: BodyInit | null | undefined = initBody ?? null;
   if (jsonBody !== undefined && initBody === undefined) {
@@ -138,6 +233,11 @@ export async function fetchStudentReport(token: string): Promise<StudentReportRe
   const data = await apiFetch<StudentReportResponse>(`/api/v1/reports/${encodeURIComponent(token)}`);
   setStudentSession(token, data);
   return data;
+}
+
+/** Student workspace report (requires `X-Student-Exam-Id` via stored workspace). */
+export async function fetchOpenStudentReport(): Promise<StudentReportResponse> {
+  return apiFetch<StudentReportResponse>('/api/v1/student/report');
 }
 
 export function getStudentReportFromCache(): StudentReportResponse | null {
@@ -685,6 +785,14 @@ export function getExportDownloadUrl(examId: string, exportId: string): string {
   return `${API_BASE}/api/v1/exams/${examId}/export/${exportId}/download`;
 }
 
+export async function getReportTokens(examId: string): Promise<Array<{ student_id: string; token: string; created_at: string }>> {
+  const res = await request<{ tokens: Array<{ student_id: string; token: string; created_at: string }> }>(
+    `/api/v1/exams/${encodeURIComponent(examId)}/reports/tokens`,
+    { method: 'POST', jsonBody: {} },
+  );
+  return res.tokens ?? [];
+}
+
 /** @deprecated Use createExportJob + polling */
 export async function generateReport(examId: string, _reportId: string): Promise<ReportConfig> {
   const j = await createExportJob(examId);
@@ -706,6 +814,31 @@ export async function listReportTokens(examId: string) {
 }
 
 // ── Graph Authoring ──
+
+/** Full graph payload for D3 ConceptDAG (readiness overlay, depth, CSV flag, weights). */
+export async function fetchGraphRetrieve(examId: string): Promise<GraphRetrieveResponse> {
+  const g = await request<GraphRetrieveResponse>(`/api/v1/exams/${examId}/graph`);
+  return {
+    status: g.status,
+    version: g.version ?? 0,
+    nodes: g.nodes ?? [],
+    edges: g.edges ?? [],
+  };
+}
+
+export async function expandConceptGraph(
+  examId: string,
+  body: { concept_id: string; max_depth?: number; context?: string },
+): Promise<GraphExpandResponse> {
+  return request<GraphExpandResponse>(`/api/v1/exams/${examId}/graph/expand`, {
+    method: 'POST',
+    jsonBody: {
+      concept_id: body.concept_id,
+      max_depth: body.max_depth ?? 3,
+      context: body.context ?? '',
+    },
+  });
+}
 
 export async function getConceptGraph(examId: string): Promise<{ nodes: ConceptGraphNode[]; edges: ConceptGraphEdge[] }> {
   const g = await request<{
@@ -767,6 +900,20 @@ export async function removeGraphEdge(examId: string, _edgeId: string, source: s
   await patchGraph(examId, { remove_edges: [{ source, target, weight: 0.5 }] });
 }
 
+/** Atomically move an edge (remove old endpoints, add new). Backend applies removes before adds. */
+export async function reconnectGraphEdge(
+  examId: string,
+  oldSource: string,
+  oldTarget: string,
+  newSource: string,
+  newTarget: string,
+): Promise<void> {
+  await patchGraph(examId, {
+    remove_edges: [{ source: oldSource, target: oldTarget, weight: 0.5 }],
+    add_edges: [{ source: newSource, target: newTarget, weight: 0.5 }],
+  });
+}
+
 // ── Student Data ──
 
 function reportToStudentReadiness(r: StudentReportResponse): StudentReadiness {
@@ -801,8 +948,14 @@ export async function getStudentReadiness(_studentId: string, _examId: string): 
 }
 
 export async function getStudyPlan(_studentId: string, _examId: string): Promise<StudyPlanStep[]> {
-  const raw = getCachedStudentReport();
-  if (!raw) throw { status: 401, message: 'No cached report' } as ApiError;
+  let raw = getCachedStudentReport();
+  if (!raw) {
+    try {
+      raw = await fetchOpenStudentReport();
+    } catch {
+      throw { status: 401, message: 'No report available' } as ApiError;
+    }
+  }
   return (raw.study_plan ?? []).map((s, i) => ({
     step: i + 1,
     concept: s.concept_label,
@@ -819,6 +972,7 @@ export async function getStudyPlan(_studentId: string, _examId: string): Promise
 function mapContentType(ct: string): StudyContent['type'] {
   if (ct === 'presentation') return 'slides';
   if (ct === 'video_walkthrough') return 'video';
+  if (ct === 'podcast') return 'podcast';
   return 'audio';
 }
 
@@ -869,15 +1023,93 @@ export async function generateStudyContent(
   return mapStudyItem(item);
 }
 
+// ── Student workspace (uploads + study content; scoped by stored exam id) ──
+
+export async function studentUploadScores(file: File) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return apiFetch(`/api/v1/student/scores`, { method: 'POST', body: fd });
+}
+
+export async function studentUploadMapping(file: File) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return apiFetch(`/api/v1/student/mapping`, { method: 'POST', body: fd });
+}
+
+export async function studentUploadGraphJson(body: { nodes: unknown[]; edges: unknown[] }) {
+  return apiFetch(`/api/v1/student/graph`, {
+    method: 'POST',
+    jsonBody: body,
+  });
+}
+
+export async function studentUploadStudyMaterial(file: File) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return apiFetch(`/api/v1/student/study-material`, { method: 'POST', body: fd });
+}
+
+export async function studentRunCompute() {
+  return apiFetch<ComputeResult>('/api/v1/student/compute', { method: 'POST', jsonBody: {} });
+}
+
+export async function getStudentStudyContent(): Promise<StudyContent[]> {
+  const res = await request<{ items: Array<Record<string, unknown>> }>(`/api/v1/student/study-content`);
+  return (res.items ?? []).map((it) => mapStudyItem(it as Parameters<typeof mapStudyItem>[0]));
+}
+
+export async function createStudentStudyContent(opts: {
+  content_type: 'audio' | 'presentation' | 'video_walkthrough' | 'podcast';
+  title: string;
+  focus_concepts?: string[];
+  include_weak_concepts?: boolean;
+  locale?: string;
+  voice_id?: string;
+  elevenlabs_model_id?: string;
+}): Promise<StudyContent> {
+  const item = await request<Parameters<typeof mapStudyItem>[0]>(`/api/v1/student/study-content`, {
+    method: 'POST',
+    jsonBody: {
+      content_type: opts.content_type,
+      title: opts.title,
+      focus_concepts: opts.focus_concepts ?? [],
+      include_weak_concepts: opts.include_weak_concepts ?? true,
+      locale: opts.locale ?? '',
+      voice_id: opts.voice_id ?? '',
+      elevenlabs_model_id: opts.elevenlabs_model_id ?? '',
+    },
+  });
+  return mapStudyItem(item);
+}
+
+export async function listElevenLabsVoices(): Promise<
+  Array<{ voice_id: string; name: string; category?: string; language?: string }>
+> {
+  const res = await request<{
+    voices: Array<{ voice_id: string; name: string; category?: string; language?: string }>;
+  }>(`/api/v1/elevenlabs/voices`);
+  return res.voices ?? [];
+}
+
 export async function getSlideContent(contentId: string): Promise<SlideData[]> {
   const item = await request<{ slides_data?: Record<string, unknown> | null }>(`/api/v1/study-content/${contentId}`);
   const slides = item.slides_data;
   if (slides && Array.isArray((slides as { slides?: unknown }).slides)) {
-    return ((slides as { slides: SlideData[] }).slides ?? []).map((s) => ({
-      title: s.title,
-      content: s.content,
-      notes: s.notes,
-    }));
+    return ((slides as { slides: Array<Record<string, unknown>> }).slides ?? []).map((s) => {
+      const content = s.content;
+      const bullets = s.bullets;
+      const lines: string[] = Array.isArray(content)
+        ? (content as string[])
+        : Array.isArray(bullets)
+          ? (bullets as string[])
+          : [];
+      return {
+        title: typeof s.title === 'string' ? s.title : '',
+        content: lines,
+        notes: typeof s.notes === 'string' ? s.notes : undefined,
+      };
+    });
   }
   return [];
 }
@@ -930,7 +1162,7 @@ export interface ChatSessionApi {
   updated_at: string;
 }
 
-/** List chat sessions (instructor: optional exam filter; student: requires report_token). */
+/** List chat sessions (instructor: optional exam filter; student: report_token or stored workspace exam). */
 export async function fetchChatSessions(options: {
   surface: ChatSurface;
   examId?: string | null;
@@ -948,7 +1180,17 @@ export async function fetchChatSessions(options: {
       params.set('report_token', token);
     }
   }
-  return request<ChatSessionApi[]>(`/chat/sessions?${params.toString()}`);
+  const headers = new Headers();
+  if (options.surface === 'student') {
+    const token = options.reportToken != null ? String(options.reportToken).trim() : '';
+    if (token.length === 0) {
+      const wid = readStudentWorkspace()?.examId;
+      if (wid) headers.set('X-Student-Exam-Id', wid);
+    }
+  }
+  return request<ChatSessionApi[]>(`/chat/sessions?${params.toString()}`, {
+    headers: headers.has('X-Student-Exam-Id') ? headers : undefined,
+  });
 }
 
 /** Load persisted messages for a chat session (user + assistant rows only from API). */
@@ -989,6 +1231,13 @@ export async function sendChatMessage(
     quickJsonBody.report_token = reportPayload;
   }
 
+  const openStudentHeaders = new Headers();
+  if (surface === 'student' && !reportPayload) {
+    const wid = readStudentWorkspace()?.examId;
+    if (wid) openStudentHeaders.set('X-Student-Exam-Id', wid);
+  }
+  const chatHdr = openStudentHeaders.has('X-Student-Exam-Id') ? openStudentHeaders : undefined;
+
   const res = sid
     ? await request<{ assistant_message: string; session_id: string }>(`/chat/sessions/${sid}/messages`, {
         method: 'POST',
@@ -997,11 +1246,13 @@ export async function sendChatMessage(
           exam_id: examPayload,
           surface,
         },
+        headers: chatHdr,
         timeoutMs: CHAT_API_TIMEOUT_MS,
       })
     : await request<{ assistant_message: string; session_id: string }>('/chat/quick', {
         method: 'POST',
         jsonBody: quickJsonBody,
+        headers: chatHdr,
         timeoutMs: CHAT_API_TIMEOUT_MS,
       });
 

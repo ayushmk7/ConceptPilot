@@ -10,6 +10,9 @@ import {
   Sparkles,
   ChevronRight,
   ChevronLeft,
+  GitBranch,
+  PenLine,
+  Headphones,
 } from 'lucide-react';
 import { useExam } from '@/lib/exam-context';
 import { AssistantHistoryNav } from '@/components/AssistantHistoryNav';
@@ -30,12 +33,18 @@ export function Sidebar() {
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/upload', label: 'Upload', icon: Upload },
+    { path: '/study-content', label: 'Study Content', icon: Headphones },
+    { path: '/graph', label: 'Knowledge Graph', icon: GitBranch },
+    { path: '/graph-structure', label: 'Graph structure', icon: PenLine },
     { path: '/reports', label: 'Reports', icon: FileText },
     { path: '/suggestions', label: 'AI Suggestions', icon: Sparkles },
   ];
 
   const isActive = (path: string) => {
     if (path === '/canvas') return pathname.startsWith('/canvas');
+    if (path === '/graph') return pathname === '/graph';
+    if (path === '/graph-structure') return pathname === '/graph-structure' || pathname.startsWith('/graph-structure/');
+    if (path === '/study-content') return pathname === '/study-content';
     return pathname === path;
   };
 

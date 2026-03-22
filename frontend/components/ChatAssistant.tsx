@@ -8,18 +8,23 @@ import * as api from '@/lib/api';
 import { useExam } from '@/lib/exam-context';
 import { ChatAssistantPanel } from '@/components/ChatAssistantPanel';
 import { getCachedStudentReport } from '@/lib/student-report';
+import { useStudentBootstrapOptional } from '@/lib/student-context';
 
 export function ChatAssistant({ surface }: { surface: ChatSurface }) {
   const router = useRouter();
   const { selectedExamId } = useExam();
   const cachedReport = typeof window !== 'undefined' ? getCachedStudentReport() : null;
+  const studentBoot = useStudentBootstrapOptional();
 
   const effectiveExamId = useMemo(() => {
+    if (surface === 'student' && studentBoot?.examId) {
+      return String(studentBoot.examId);
+    }
     if (surface === 'student' && cachedReport?.exam_id) {
       return String(cachedReport.exam_id);
     }
     return selectedExamId;
-  }, [surface, cachedReport?.exam_id, selectedExamId]);
+  }, [surface, studentBoot?.examId, cachedReport?.exam_id, selectedExamId]);
 
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);

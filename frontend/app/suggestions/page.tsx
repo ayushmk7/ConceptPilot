@@ -1,27 +1,71 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { InstructorLayout } from '@/components/InstructorLayout';
-import { Check, X, ChevronDown, Sparkles, Clock, Cpu, Hash, FileText } from 'lucide-react';
+import { Check, X, ChevronDown, Sparkles, Clock, Cpu, Hash, FileText, Loader2 } from 'lucide-react';
 import { DotPattern } from '@/components/svg/DotPattern';
 import type { AISuggestion } from '@/lib/types';
-import { MOCK_SUGGESTIONS } from '@/lib/mock-data';
+import * as api from '@/lib/api';
+import { getFetchErrorMessage } from '@/lib/api';
+import { useExam } from '@/lib/exam-context';
 
 export default function AISuggestions() {
-  const [suggestions, setSuggestions] = useState<AISuggestion[]>(MOCK_SUGGESTIONS);
+  const { selectedExamId } = useExam();
+  const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  const handleReview = (id: string, action: 'accept' | 'reject') => {
-    setSuggestions((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, status: action === 'accept' ? 'accepted' as const : 'rejected' as const } : s))
-    );
+  const reload = useCallback(async () => {
+    if (!selectedExamId) {
+      setSuggestions([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setPageError(null);
+    try {
+      const rows = await api.getSuggestions(selectedExamId);
+      setSuggestions(rows);
+    } catch (e) {
+      setPageError(getFetchErrorMessage(e, 'Failed to load suggestions'));
+      setSuggestions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedExamId]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const handleReview = async (id: string, action: 'accept' | 'reject') => {
+    if (!selectedExamId) return;
+    setBusyId(id);
+    setPageError(null);
+    try {
+      await api.reviewSuggestion(selectedExamId, id, action);
+      await reload();
+    } catch (e) {
+      setPageError(getFetchErrorMessage(e, 'Review failed'));
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const handleBulkAction = (action: 'accept' | 'reject') => {
+  const handleBulkAction = async (action: 'accept' | 'reject') => {
+    if (!selectedExamId) return;
     const pending = suggestions.filter((s) => s.status === 'pending');
-    for (const s of pending) {
-      handleReview(s.id, action);
+    setPageError(null);
+    try {
+      for (const s of pending) {
+        await api.reviewSuggestion(selectedExamId, s.id, action);
+      }
+      await reload();
+    } catch (e) {
+      setPageError(getFetchErrorMessage(e, 'Bulk review failed'));
     }
   };
 
@@ -78,6 +122,15 @@ export default function AISuggestions() {
             </div>
           </div>
           <p className="text-sm text-muted-foreground mb-6 animate-fade-in">Review and manage AI-generated suggestions for your concept graph.</p>
+          {!selectedExamId && (
+            <p className="text-sm text-muted-foreground mb-4">Select an exam in the header to load suggestions.</p>
+          )}
+          {pageError && <p className="text-sm text-destructive mb-4">{pageError}</p>}
+          {loading && selectedExamId && (
+            <p className="text-sm text-muted-foreground mb-4 inline-flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+            </p>
+          )}
 
           {/* Filter tabs */}
           <div className="flex gap-2 mb-4 animate-fade-in">
@@ -135,10 +188,10 @@ export default function AISuggestions() {
                       <td className="py-3 px-4">
                         {suggestion.status === 'pending' && (
                           <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                <button onClick={() => handleReview(suggestion.id, 'accept')} className="p-1.5 hover:bg-chart-4/10 rounded-lg transition-colors" title="Accept">
-                                  <Check className="w-4 h-4 text-chart-4" />
+                                <button type="button" disabled={busyId === suggestion.id} onClick={() => void handleReview(suggestion.id, 'accept')} className="p-1.5 hover:bg-chart-4/10 rounded-lg transition-colors disabled:opacity-40" title="Accept">
+                                  {busyId === suggestion.id ? <Loader2 className="w-4 h-4 animate-spin text-chart-4" /> : <Check className="w-4 h-4 text-chart-4" />}
                                 </button>
-                                <button onClick={() => handleReview(suggestion.id, 'reject')} className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors" title="Reject">
+                                <button type="button" disabled={busyId === suggestion.id} onClick={() => void handleReview(suggestion.id, 'reject')} className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-40" title="Reject">
                                   <X className="w-4 h-4 text-destructive" />
                                 </button>
                           </div>

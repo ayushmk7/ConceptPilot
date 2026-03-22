@@ -63,6 +63,9 @@ async def create_study_content(
         source_context={
             "focus_concepts": body.focus_concepts,
             "include_weak_concepts": body.include_weak_concepts,
+            "locale": (body.locale or "").strip(),
+            "voice_id": (body.voice_id or "").strip(),
+            "elevenlabs_model_id": (body.elevenlabs_model_id or "").strip(),
         },
         status="pending",
     )
@@ -129,10 +132,10 @@ async def download_study_content(
             },
         )
 
-    if item.content_type not in {"audio", "video_walkthrough"}:
+    if item.content_type not in {"audio", "video_walkthrough", "podcast"}:
         raise HTTPException(
             status_code=400,
-            detail="Download supports audio, video_walkthrough (MP3), or presentation (JSON)",
+            detail="Download supports audio, video_walkthrough, podcast (MP3), or presentation (JSON)",
         )
     if not item.storage_key:
         raise HTTPException(status_code=404, detail="No generated file available")
@@ -159,9 +162,5 @@ async def stream_study_content(
     content_id: UUID,
     db: AsyncSession = Depends(get_db),
 ):
-    response = await download_study_content(content_id=content_id, db=db, _user=_user)
-    if isinstance(response, FileResponse):
-        return FileResponse(path=response.path, media_type="audio/mpeg")
-    if isinstance(response, JSONResponse):
-        return response
-    return response
+    """Same payload as download; useful for `<audio src>` style playback."""
+    return await download_study_content(content_id=content_id, db=db)

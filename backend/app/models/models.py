@@ -88,6 +88,23 @@ class Project(Base):
     study_contents = relationship("StudyContent", back_populates="project")
 
 
+class StudentWorkspace(Base):
+    """Anonymous student surface: ties an exam to a canvas project and synthetic learner id."""
+
+    __tablename__ = "student_workspaces"
+
+    exam_id = Column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="CASCADE"), primary_key=True)
+    canvas_project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("canvas_projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    student_external_id = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    exam = relationship("Exam", backref="student_workspace", uselist=False)
+
+
 class CanvasWorkspace(Base):
     """Instructor canvas (React Flow) workspace persisted as JSON."""
 

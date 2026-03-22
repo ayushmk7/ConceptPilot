@@ -3,21 +3,25 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, FileText, BookOpen, Headphones, ChevronRight, ChevronLeft, MessageSquare, GitBranch } from 'lucide-react';
+import { LayoutDashboard, Upload, FileText, BookOpen, Headphones, ChevronRight, ChevronLeft, MessageSquare, GitBranch, PenLine } from 'lucide-react';
 import { AssistantHistoryNav } from '@/components/AssistantHistoryNav';
+import { useStudentBootstrapOptional } from '@/lib/student-context';
 
 export function StudentSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
+  const boot = useStudentBootstrapOptional();
+  const canvasHref = boot?.canvasProjectId ? `/canvas/${boot.canvasProjectId}?role=student` : '/canvas?role=student';
 
   const menuItems = [
     { path: '/student', label: 'Overview', icon: LayoutDashboard, exact: true },
-    { path: '/student/upload', label: 'Upload Test', icon: Upload },
+    { path: '/student/upload', label: 'Upload', icon: Upload },
     { path: '/student/report', label: 'My Report', icon: FileText },
     { path: '/student/study-plan', label: 'Study Plan', icon: BookOpen },
     { path: '/student/study-content', label: 'Study Content', icon: Headphones },
-    { path: '/student/graph', label: 'Graph Editor', icon: GitBranch },
-    { path: '/canvas', label: 'Canvas', icon: MessageSquare, href: '/canvas?role=student' },
+    { path: '/student/graph', label: 'Knowledge Graph', icon: GitBranch, exact: true },
+    { path: '/student/graph-structure', label: 'Graph structure', icon: PenLine, exact: true },
+    { path: '/canvas', label: 'Canvas', icon: MessageSquare, href: canvasHref },
   ];
 
   const isActive = (item: { path: string; exact?: boolean }) =>

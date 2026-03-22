@@ -9,6 +9,7 @@ import {
   deleteCanvasWorkspace,
   type CanvasWorkspaceApi,
 } from '@/lib/canvas-api';
+import { getFetchErrorMessage } from '@/lib/api';
 
 export default function CanvasProjectsPage() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function CanvasProjectsPage() {
       const rows = await listCanvasWorkspaces();
       setProjects(rows);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load workspaces');
+      setError(getFetchErrorMessage(e, 'Failed to load workspaces'));
     } finally {
       setLoading(false);
     }
@@ -40,7 +41,7 @@ export default function CanvasProjectsPage() {
       const row = await createCanvasWorkspace();
       router.push(`/canvas/${row.id}${roleSuffix}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create workspace');
+      setError(getFetchErrorMessage(e, 'Failed to create workspace'));
     }
   };
 
@@ -50,7 +51,7 @@ export default function CanvasProjectsPage() {
       await deleteCanvasWorkspace(id);
       setProjects((prev) => prev.filter((p) => p.id !== id));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete workspace');
+      setError(getFetchErrorMessage(e, 'Failed to delete workspace'));
     }
   };
 

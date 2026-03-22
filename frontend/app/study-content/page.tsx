@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { InstructorLayout } from '@/components/InstructorLayout';
 import { DotPattern } from '@/components/svg/DotPattern';
 import { Headphones, Presentation, Video, Plus, Loader2 } from 'lucide-react';
@@ -18,13 +18,9 @@ export default function InstructorStudyContentPage() {
   const [error, setError] = useState<string | null>(null);
   const [openContent, setOpenContent] = useState<StudyContent | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!selectedExamId) return;
-    loadContent();
-  }, [selectedExamId]);
-
-  const loadContent = async () => {
+  const loadContent = useCallback(async () => {
     if (!selectedExamId) return;
     setLoading(true);
     setError(null);
@@ -36,16 +32,46 @@ export default function InstructorStudyContentPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedExamId]);
+
+  useEffect(() => {
+    if (!selectedExamId) return;
+    void loadContent();
+  }, [selectedExamId, loadContent]);
+
+  useEffect(() => {
+    if (!selectedExamId) return;
+    if (!content.some((c) => c.status === 'generating')) return;
+    let polls = 0;
+    const id = setInterval(async () => {
+      polls += 1;
+      if (polls > 120) {
+        clearInterval(id);
+        return;
+      }
+      try {
+        const data = await api.getStudyContent(selectedExamId);
+        setContent(data);
+        setOpenContent((prev) => {
+          if (!prev) return null;
+          return data.find((c) => c.id === prev.id) ?? prev;
+        });
+      } catch {
+        /* keep current list */
+      }
+    }, 3000);
+    return () => clearInterval(id);
+  }, [selectedExamId, content]);
 
   const handleGenerate = async (type: 'audio' | 'slides' | 'video') => {
     if (!selectedExamId) return;
     setGenerating(type);
+    setGenError(null);
     try {
       const newContent = await api.generateStudyContent(selectedExamId, type);
       setContent((prev) => [...prev, newContent]);
-    } catch {
-      // handled silently
+    } catch (e) {
+      setGenError(api.getFetchErrorMessage(e, 'Failed to queue generation'));
     } finally {
       setGenerating(null);
     }
@@ -73,11 +99,16 @@ export default function InstructorStudyContentPage() {
             <p className="text-sm text-muted-foreground">
               Generate audio, slide decks, and video walkthroughs for this exam (runs asynchronously on the server).
             </p>
+            {genError && (
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                {genError}
+              </p>
+            )}
           </div>
 
           {openContent && (
             <div className="mb-6 animate-fade-in-up">
-              {openContent.type === 'audio' && (
+              {(openContent.type === 'audio' || openContent.type === 'podcast') && (
                 <AudioPlayer content={openContent} onClose={() => setOpenContent(null)} />
               )}
               {openContent.type === 'slides' && (

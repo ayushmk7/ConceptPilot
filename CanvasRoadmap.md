@@ -410,7 +410,7 @@ Defined in `services/canvas/skills.py` as a static dict keyed by skill name:
 | `Socratic` | Answers questions with questions |
 | `Research Assistant` | Summarizes, cites, structures information |
 
-> **Hackathon decision:** Reduced from 6 skills to 3. Removed: Devil's Advocate, Code Coach, Study Buddy.
+> **Scope decision:** Reduced from 6 skills to 3. Removed: Devil's Advocate, Code Coach, Study Buddy.
 
 ---
 
@@ -580,12 +580,12 @@ Build in this sequence. Each step is independently testable.
 
 1. ✅ Create `services/canvas/skills.py` (3 skills only: Tutor, Socratic, Research Assistant)
 2. ✅ Create `services/canvas/context.py` (context assembly — builds messages array from linked nodes)
-3. ✅ Create `services/canvas/claude.py` (Anthropic streaming wrapper — no tool handling for hackathon)
+3. ✅ Create `services/canvas/claude.py` (Anthropic streaming wrapper — no tool handling in initial scope)
 4. ✅ Add `POST /api/canvas/nodes/:id/messages` SSE endpoint to `routers/canvas.py`
 5. ✅ Add `GET /api/canvas/nodes/:id/messages` list endpoint
 6. ✅ **Test**: `curl -N -X POST .../messages` → SSE tokens stream, messages persisted to DB
 
-> **Hackathon scope decisions:**
+> **Initial scope decisions:**
 > - Tools (`create_branches`, `generate_quiz`, etc.) — **SKIPPED**, too complex under time pressure
 > - Skills reduced to 3: **Tutor**, **Socratic**, **Research Assistant**
 
