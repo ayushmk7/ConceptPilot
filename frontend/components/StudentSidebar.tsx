@@ -3,22 +3,16 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Upload, FileText, BookOpen, Headphones, ChevronRight, ChevronLeft, MessageSquare, GitBranch } from 'lucide-react';
+import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { AssistantHistoryNav } from '@/components/AssistantHistoryNav';
+import { useStudentBootstrapOptional } from '@/lib/student-context';
+import { buildStudentMenuItems } from '@/lib/student-nav';
 
 export function StudentSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
-
-  const menuItems = [
-    { path: '/student', label: 'Overview', icon: LayoutDashboard, exact: true },
-    { path: '/student/upload', label: 'Upload Test', icon: Upload },
-    { path: '/student/report', label: 'My Report', icon: FileText },
-    { path: '/student/study-plan', label: 'Study Plan', icon: BookOpen },
-    { path: '/student/study-content', label: 'Study Content', icon: Headphones },
-    { path: '/student/graph', label: 'Graph Editor', icon: GitBranch },
-    { path: '/canvas', label: 'Canvas', icon: MessageSquare, href: '/canvas?role=student' },
-  ];
+  const boot = useStudentBootstrapOptional();
+  const menuItems = buildStudentMenuItems(boot?.canvasProjectId);
 
   const isActive = (item: { path: string; exact?: boolean }) =>
     item.exact ? pathname === item.path : pathname.startsWith(item.path);

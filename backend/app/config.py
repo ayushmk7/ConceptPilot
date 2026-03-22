@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     # --- Chat sessions (until auth: placeholder owner id) ---
     CHAT_DEFAULT_CREATED_BY: str = "local"
 
+    # --- Anonymous student workspace (created on demand; labels only) ---
+    STUDENT_WORKSPACE_COURSE_NAME: str = "Workspace"
+    STUDENT_WORKSPACE_EXAM_NAME: str = "Uploaded data"
+    STUDENT_WORKSPACE_PROJECT_TITLE: str = "Study"
+    STUDENT_WORKSPACE_CANVAS_TITLE: str = "Canvas"
+
     # --- ElevenLabs (study-content TTS for audio / video_walkthrough; optional) ---
     ELEVENLABS_API_KEY: str = ""
     ELEVENLABS_VOICE_ID: str = ""

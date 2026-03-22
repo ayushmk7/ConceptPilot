@@ -43,6 +43,44 @@ export interface ConceptGraphEdge {
   target: string;
 }
 
+/** GET /api/v1/exams/{id}/graph — matches backend GraphRetrieve*. */
+export interface GraphRetrieveNode {
+  id: string;
+  label: string;
+  readiness?: number | null;
+  is_csv_observed: boolean;
+  depth: number;
+}
+
+export interface GraphRetrieveEdge {
+  source: string;
+  target: string;
+  weight: number;
+}
+
+export interface GraphRetrieveResponse {
+  status: string;
+  version: number;
+  nodes: GraphRetrieveNode[];
+  edges: GraphRetrieveEdge[];
+}
+
+export interface GraphExpandResponse {
+  status: string;
+  new_nodes: GraphRetrieveNode[];
+  new_edges: GraphRetrieveEdge[];
+  suggestion_id?: string | null;
+}
+
+/** Legacy fallback for ConceptDAG when graph API is empty (e.g. dashboard aggregates). */
+export interface LegacyConceptForDag {
+  id: string;
+  name: string;
+  readiness: number;
+  depth: number;
+  prerequisites: string[];
+}
+
 export interface Alert {
   id: string;
   concept: string;
@@ -115,7 +153,7 @@ export interface StudyPlanStep {
 
 export interface StudyContent {
   id: string;
-  type: 'audio' | 'slides' | 'video';
+  type: 'audio' | 'slides' | 'video' | 'podcast';
   title: string;
   description: string;
   duration?: string;

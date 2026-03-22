@@ -9,6 +9,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.database import Base, _build_connect_args, _clean_async_url, get_db
+from app.models import canvas as _canvas_models  # noqa: F401 — register canvas_projects FK
+from app.models import models as _orm_models  # noqa: F401 — register StudentWorkspace etc.
 from app.routers import chat as chat_router
 
 
@@ -90,9 +92,23 @@ async def test_create_chat_session_returns_id(chat_client):
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_create_student_session_requires_report_token(chat_client):
-    res = await chat_client.post("/chat/sessions", json={"surface": "student"})
-    assert res.status_code == 422
+async def test_create_student_session_open_workspace(chat_client, chat_db_session):
+    """Student surface without report_token uses X-Student-Exam-Id + student_workspaces row."""
+    from app.services.student_workspace_service import bootstrap_student_workspace
+
+    ws = await bootstrap_student_workspace(chat_db_session)
+    await chat_db_session.flush()
+    exam_id = str(ws.exam_id)
+
+    res = await chat_client.post(
+        "/chat/sessions",
+        json={"surface": "student", "exam_id": exam_id},
+        headers={"X-Student-Exam-Id": exam_id},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data.get("surface") == "student"
+    assert data.get("exam_id") == exam_id
 
 
 @pytest.mark.asyncio(loop_scope="session")

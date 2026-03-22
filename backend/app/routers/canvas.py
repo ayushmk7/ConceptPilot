@@ -1,10 +1,12 @@
-from uuid import UUID
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from pydantic import BaseModel
+import asyncio
 from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.canvas import (
@@ -17,6 +19,7 @@ from app.models.canvas import (
     CanvasSession,
 )
 from app.services.canvas.claude import stream_canvas_response
+from app.services.canvas.multiplayer import broadcast
 from app.services.canvas.storage import save_file
 
 router = APIRouter()
@@ -158,7 +161,11 @@ async def create_node(
     )
     db.add(node)
     await db.flush()
-    return _node_dict(node)
+    node_data = _node_dict(node)
+    asyncio.create_task(
+        broadcast(str(project_id), {"type": "node_created", "node": node_data})
+    )
+    return node_data
 
 
 @router.patch("/nodes/{node_id}")
@@ -169,11 +176,38 @@ async def update_node(
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    updated = body.model_dump(exclude_unset=True)
+    for field, value in updated.items():
         setattr(node, field, value)
 
     await db.flush()
-    return _node_dict(node)
+    node_data = _node_dict(node)
+
+    if "is_collapsed" in updated:
+        asyncio.create_task(
+            broadcast(
+                str(node.project_id),
+                {
+                    "type": "node_collapsed",
+                    "node_id": str(node_id),
+                    "is_collapsed": node.is_collapsed,
+                },
+            )
+        )
+    elif "position_x" in updated or "position_y" in updated:
+        asyncio.create_task(
+            broadcast(
+                str(node.project_id),
+                {
+                    "type": "node_moved",
+                    "node_id": str(node_id),
+                    "x": node.position_x,
+                    "y": node.position_y,
+                },
+            )
+        )
+
+    return node_data
 
 
 @router.delete("/nodes/{node_id}", status_code=204)
@@ -181,7 +215,11 @@ async def delete_node(node_id: UUID, db: AsyncSession = Depends(get_db)):
     node = await db.get(CanvasNode, node_id)
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
+    project_id = str(node.project_id)
     await db.delete(node)
+    asyncio.create_task(
+        broadcast(project_id, {"type": "node_deleted", "node_id": str(node_id)})
+    )
 
 
 @router.post("/projects/{project_id}/edges", status_code=201)
@@ -198,7 +236,11 @@ async def create_edge(
     )
     db.add(edge)
     await db.flush()
-    return _edge_dict(edge)
+    edge_data = _edge_dict(edge)
+    asyncio.create_task(
+        broadcast(str(project_id), {"type": "edge_created", "edge": edge_data})
+    )
+    return edge_data
 
 
 @router.delete("/edges/{edge_id}", status_code=204)
@@ -206,7 +248,11 @@ async def delete_edge(edge_id: UUID, db: AsyncSession = Depends(get_db)):
     edge = await db.get(CanvasEdge, edge_id)
     if not edge:
         raise HTTPException(status_code=404, detail="Edge not found")
+    project_id = str(edge.project_id)
     await db.delete(edge)
+    asyncio.create_task(
+        broadcast(project_id, {"type": "edge_deleted", "edge_id": str(edge_id)})
+    )
 
 
 @router.get("/nodes/{node_id}/messages")
@@ -292,9 +338,17 @@ async def create_branch(
     db.add(branch)
     await db.flush()
 
+    child_data = _node_dict(child)
+    edge_data = _edge_dict(edge)
+    asyncio.create_task(
+        broadcast(str(node.project_id), {"type": "node_created", "node": child_data})
+    )
+    asyncio.create_task(
+        broadcast(str(node.project_id), {"type": "edge_created", "edge": edge_data})
+    )
     return {
-        "child_node": _node_dict(child),
-        "edge": _edge_dict(edge),
+        "child_node": child_data,
+        "edge": edge_data,
         "branch_record": {
             "id": str(branch.id),
             "parent_node_id": str(branch.parent_node_id),
@@ -402,7 +456,54 @@ async def create_session(
     db.add(session)
     await db.flush()
 
+    asyncio.create_task(
+        broadcast(
+            str(project_id),
+            {
+                "type": "session_joined",
+                "session_id": str(session.id),
+                "display_name": session.display_name,
+            },
+        )
+    )
     return {
         "session_id": str(session.id),
         "display_name": session.display_name,
     }
+
+
+# ---------------------------------------------------------------------------
+# Artifact download
+# ---------------------------------------------------------------------------
+
+
+@router.get("/nodes/{node_id}/artifact/download")
+async def download_artifact(node_id: UUID, db: AsyncSession = Depends(get_db)):
+    node = await db.get(CanvasNode, node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    if node.type != "artifact":
+        raise HTTPException(status_code=400, detail="Node is not an artifact")
+
+    # Fetch the latest assistant message — that's the generated artifact content
+    result = await db.execute(
+        select(CanvasMessage)
+        .where(CanvasMessage.node_id == node_id)
+        .where(CanvasMessage.role == "assistant")
+        .order_by(CanvasMessage.created_at.desc())
+        .limit(1)
+    )
+    msg = result.scalar_one_or_none()
+    if not msg or not msg.content:
+        raise HTTPException(status_code=404, detail="Artifact has no content yet")
+
+    safe_title = "".join(
+        c if c.isalnum() or c in "-_ " else "" for c in (node.title or "artifact")
+    )
+    filename = f"{safe_title.strip().replace(' ', '_')}.md"
+
+    return Response(
+        content=msg.content.encode("utf-8"),
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

@@ -1,37 +1,16 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { StudentLayout } from '@/components/StudentLayout';
 import { DotPattern } from '@/components/svg/DotPattern';
 import { Skeleton } from '@/components/LoadingSkeleton';
-import Link from 'next/link';
-import { readinessColorFromScore, readinessColorsJs, themeColor } from '@/lib/theme-colors';
-import { MOCK_STUDENT_CONCEPTS, MOCK_GRAPH_NODES, MOCK_GRAPH_EDGES } from '@/lib/mock-data';
-
-const ReactFlowGraph = dynamic(
-  () => import('@xyflow/react').then((m) => {
-    require('@xyflow/react/dist/style.css');
-    return {
-      default: ({ nodes, edges, edgeOptions, bgColor }: {
-        nodes: any[]; edges: any[];
-        edgeOptions: any; bgColor: string;
-      }) => (
-        <m.ReactFlow
-          nodes={nodes}
-          edges={edges}
-          fitView
-          defaultEdgeOptions={edgeOptions}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-        >
-          <m.Background gap={20} size={1} color={bgColor} />
-        </m.ReactFlow>
-      ),
-    };
-  }),
-  { ssr: false, loading: () => <Skeleton className="h-80 w-full" /> },
-);
+import { readinessColorFromScore, readinessColorsJs } from '@/lib/theme-colors';
+import * as api from '@/lib/api';
+import type { ConceptReadiness } from '@/lib/types';
+import type { StudentReportResponse } from '@/lib/api-types';
+import { StudentConceptGraphDynamic } from '@/components/graph/d3-graphs-dynamic';
+import { graphNodesEdgesToStudentConcepts } from '@/lib/graph-student-concepts';
 
 const heatLegend = readinessColorsJs.map((color, i) => ({
   color,
@@ -39,40 +18,46 @@ const heatLegend = readinessColorsJs.map((color, i) => ({
 }));
 
 export default function StudentReport() {
-  const concepts = MOCK_STUDENT_CONCEPTS;
-  const graphNodes = MOCK_GRAPH_NODES;
-  const graphEdges = MOCK_GRAPH_EDGES;
+  const [report, setReport] = useState<StudentReportResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
-  const positions = [
-    { x: 200, y: 20 }, { x: 400, y: 20 }, { x: 100, y: 130 },
-    { x: 300, y: 130 }, { x: 200, y: 240 }, { x: 0, y: 130 },
-    { x: 300, y: 240 }, { x: 400, y: 240 },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await api.fetchOpenStudentReport();
+        if (!cancelled) setReport(r);
+      } catch (e) {
+        if (!cancelled) {
+          setErr(e && typeof e === 'object' && 'message' in e ? String((e as { message: string }).message) : 'Failed to load report');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const flowNodes = graphNodes.map((n, i) => ({
-    id: n.id,
-    position: positions[i] || { x: i * 140, y: 100 },
-    data: { label: `${n.label} (${((n.readiness || 0) * 100).toFixed(0)}%)` },
-    type: 'default' as const,
-    style: {
-      background: readinessColorFromScore(n.readiness || 0),
-      color: themeColor.white,
-      border: 'none',
-      borderRadius: '8px',
-      padding: '10px 14px',
-      fontSize: '12px',
-      fontWeight: 500,
-      boxShadow: `0 2px 8px ${readinessColorFromScore(n.readiness || 0)}30`,
-    },
-  }));
+  const concepts: ConceptReadiness[] = report ? api.studentReportToConcepts(report) : [];
+  const { nodes: graphNodes, edges: graphEdges } = report ? api.studentReportToGraph(report) : { nodes: [], edges: [] };
 
-  const flowEdges = graphEdges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    type: 'smoothstep' as const,
-    style: { stroke: themeColor.input, strokeWidth: 2 },
-  }));
+  const studentReadinessRecord = useMemo(() => {
+    const m: Record<string, number> = {};
+    if (report?.readiness) {
+      for (const x of report.readiness) {
+        m[x.concept_id] = x.final_readiness;
+      }
+    }
+    return m;
+  }, [report]);
+
+  const studentGraphConcepts = useMemo(() => {
+    if (graphNodes.length === 0) return [];
+    return graphNodesEdgesToStudentConcepts(graphNodes, graphEdges, studentReadinessRecord);
+  }, [graphNodes, graphEdges, studentReadinessRecord]);
 
   const weakConcepts = concepts.filter((c) => c.readiness < 0.6).sort((a, b) => a.readiness - b.readiness);
 
@@ -84,93 +69,113 @@ export default function StudentReport() {
         <div className="relative">
           <div className="mb-8 animate-fade-in">
             <h1 className="text-2xl font-semibold text-primary mb-1">Your Readiness Report</h1>
-            <p className="text-sm text-muted-foreground">EECS 280 &bull; Midterm 1 &bull; Detailed concept-level analysis</p>
+            <p className="text-sm text-muted-foreground">Concept-level analysis from your uploaded data in this browser workspace.</p>
           </div>
 
-          {/* Concept Map */}
-          <div className="card-elevated p-6 mb-6 animate-fade-in-up delay-100">
-            <h2 className="text-lg font-semibold text-primary mb-4">Concept Map</h2>
-            <div className="h-80 bg-muted/50 rounded-xl border border-border">
-              <ReactFlowGraph
-                nodes={flowNodes}
-                edges={flowEdges}
-                edgeOptions={{ type: 'smoothstep', style: { stroke: themeColor.input, strokeWidth: 2 } }}
-                bgColor={themeColor.border}
-              />
-            </div>
-            <div className="flex items-center gap-4 mt-4 text-xs">
-              {heatLegend.map((item) => (
-                <div key={item.label} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }} />
-                  <span className="text-secondary-text">{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          {loading && <Skeleton className="h-96 w-full rounded-xl" />}
+          {err && <p className="text-sm text-destructive">{err}</p>}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Readiness Breakdown */}
-            <div className="card-elevated p-6 animate-fade-in-up delay-200">
-              <h2 className="text-lg font-semibold text-primary mb-4">Readiness Breakdown</h2>
-              <div className="space-y-3">
-                {[...concepts].sort((a, b) => a.readiness - b.readiness).map((concept) => (
-                  <div key={concept.concept} className="flex items-center justify-between py-2 border-b border-muted last:border-0">
-                    <span className="text-sm font-medium text-foreground">{concept.concept}</span>
-                    <div className="flex items-center gap-3">
-                      <div className="w-24 h-2 bg-border rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${concept.readiness * 100}%`, backgroundColor: readinessColorFromScore(concept.readiness) }} />
-                      </div>
-                      <span className="text-sm font-medium text-foreground w-10 text-right">{(concept.readiness * 100).toFixed(0)}%</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Areas for Focus */}
-            <div className="card-elevated p-6 animate-fade-in-up delay-300">
-              <h2 className="text-lg font-semibold text-primary mb-4">Areas for Focus</h2>
-              <div className="space-y-3">
-                {weakConcepts.map((concept) => (
-                  <div key={concept.concept} className="border border-border rounded-xl p-4">
-                    <div className="flex items-start justify-between mb-1">
-                      <div className="font-medium text-foreground text-sm">{concept.concept}</div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium" style={{ color: readinessColorFromScore(concept.readiness) }}>
-                          {(concept.readiness * 100).toFixed(0)}%
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${
-                          concept.confidence === 'high' ? 'bg-chart-4/10 text-chart-4' : concept.confidence === 'medium' ? 'bg-chart-3/10 text-chart-3' : 'bg-muted-foreground/10 text-muted-foreground'
-                        }`}>
-                          {concept.confidence}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {concept.questionCount} questions &bull; Direct: {(concept.directReadiness * 100).toFixed(0)}% &bull; Penalty: {(concept.prerequisitePenalty * 100).toFixed(0)}%
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* CTA */}
-          <div className="mt-6 card-elevated p-6 animate-fade-in-up delay-400">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div>
-                <h3 className="text-base font-semibold text-primary mb-1">Ready to improve?</h3>
-                <p className="text-sm text-secondary-text">View your personalized study plan ordered by prerequisite dependencies.</p>
-              </div>
-              <Link href="/student/study-plan" className="bg-chart-5 hover:bg-blue-600 text-white rounded-lg py-2.5 px-6 font-medium transition-colors text-sm flex-shrink-0">
-                View Study Plan
+          {!loading && !err && !report && (
+            <div className="card-elevated p-6 rounded-xl text-sm text-muted-foreground">
+              <p>No report payload loaded. If you just finished an upload, wait a moment and refresh, or open this page from the sidebar (My Report).</p>
+              <Link href="/student/upload" className="mt-3 inline-block text-primary font-medium hover:underline">
+                Back to Upload
               </Link>
             </div>
-          </div>
+          )}
 
-          <div className="mt-6 text-center animate-fade-in-up delay-500">
-            <p className="text-xs text-muted-foreground">This report is private to you. No peer comparisons or rankings are shown.</p>
-          </div>
+          {!loading && !err && report && (
+            <>
+              <div className="card-elevated p-6 mb-6 animate-fade-in-up delay-100">
+                <h2 className="text-lg text-foreground mb-4">Your Concept Map</h2>
+                <div className="flex min-h-[280px] h-[min(50vh,400px)] flex-col overflow-hidden rounded-xl border border-border bg-muted/50">
+                  {studentGraphConcepts.length > 0 ? (
+                    <StudentConceptGraphDynamic concepts={studentGraphConcepts} studentReadiness={studentReadinessRecord} />
+                  ) : (
+                    <div className="flex h-full min-h-[200px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                      No graph yet. Upload scores and mapping, then run compute — or upload study material to generate a draft graph.
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground text-center mt-4">
+                  Interactive view showing mastery across all course concepts
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+                  {heatLegend.map((item) => (
+                    <div key={item.label} className="flex items-center gap-2">
+                      <div className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: item.color }} />
+                      <span className="text-secondary-text">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="card-elevated p-6 animate-fade-in-up delay-200">
+                  <h2 className="text-lg font-semibold text-primary mb-4">Readiness Breakdown</h2>
+                  <div className="space-y-3">
+                    {concepts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No readiness rows yet. Upload test CSVs and run compute.</p>
+                    ) : (
+                      [...concepts].sort((a, b) => a.readiness - b.readiness).map((concept) => (
+                        <div key={concept.concept} className="flex items-center justify-between py-2 border-b border-muted last:border-0">
+                          <span className="text-sm font-medium text-foreground">{concept.concept}</span>
+                          <div className="flex items-center gap-3">
+                            <div className="w-24 h-2 bg-border rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${concept.readiness * 100}%`, backgroundColor: readinessColorFromScore(concept.readiness) }}
+                              />
+                            </div>
+                            <span className="text-sm font-medium text-foreground w-10 text-right">{(concept.readiness * 100).toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="card-elevated p-6 animate-fade-in-up delay-300">
+                  <h2 className="text-lg font-semibold text-primary mb-4">Areas for Focus</h2>
+                  <div className="space-y-3">
+                    {weakConcepts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No weak concepts identified yet.</p>
+                    ) : (
+                      weakConcepts.map((concept) => (
+                        <div key={concept.concept} className="border border-border rounded-xl p-4">
+                          <div className="flex items-start justify-between mb-1">
+                            <div className="font-medium text-foreground text-sm">{concept.concept}</div>
+                            <span className="text-sm font-medium" style={{ color: readinessColorFromScore(concept.readiness) }}>
+                              {(concept.readiness * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 card-elevated p-6 animate-fade-in-up delay-400">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-primary mb-1">Study plan</h3>
+                    <p className="text-sm text-secondary-text">Ordered by prerequisite dependencies when readiness data exists.</p>
+                  </div>
+                  <Link
+                    href="/student/study-plan"
+                    className="bg-chart-5 hover:bg-blue-600 text-white rounded-lg py-2.5 px-6 font-medium transition-colors text-sm flex-shrink-0"
+                  >
+                    View Study Plan
+                  </Link>
+                </div>
+              </div>
+
+              <div className="mt-6 text-center animate-fade-in-up delay-500">
+                <p className="text-xs text-muted-foreground">Data is stored for this workspace only on this device until you clear site data.</p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </StudentLayout>

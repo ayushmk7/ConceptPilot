@@ -156,7 +156,7 @@ async def assemble_context(
 
     # Step 5 — truncation
     # Simplified truncation: keep the tail of each half.
-    # A per-node cap would be more precise but this is sufficient for hackathon.
+    # A per-node cap would be more precise but this is sufficient for typical canvas sizes.
     context_truncated = False
     if len(messages) > 150:
         own_history = own_history[-50:]

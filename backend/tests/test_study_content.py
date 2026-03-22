@@ -143,6 +143,49 @@ class TestStudyContentEndpoints:
         assert resp.headers["content-type"].startswith("audio/mpeg")
 
     @pytest.mark.asyncio(loop_scope="session")
+    async def test_download_local_podcast_mp3(self, client, db_session, seed_exam, tmp_path):
+        audio_path = tmp_path / "podcast.mp3"
+        audio_path.write_bytes(b"fake-podcast")
+
+        record = StudyContent(
+            exam_id=seed_exam["exam_id"],
+            content_type="podcast",
+            title="Podcast sample",
+            source_context={},
+            status="completed",
+            storage_key=f"file://{audio_path}",
+        )
+        db_session.add(record)
+        await db_session.flush()
+
+        resp = await client.get(f"/api/v1/study-content/{record.id}/download")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("audio/mpeg")
+        assert resp.content == b"fake-podcast"
+
+    @pytest.mark.asyncio(loop_scope="session")
+    async def test_stream_matches_download_for_local_audio(self, client, db_session, seed_exam, tmp_path):
+        audio_path = tmp_path / "stream.mp3"
+        audio_path.write_bytes(b"stream-bytes")
+
+        record = StudyContent(
+            exam_id=seed_exam["exam_id"],
+            content_type="audio",
+            title="Stream test",
+            source_context={},
+            status="completed",
+            storage_key=f"file://{audio_path}",
+        )
+        db_session.add(record)
+        await db_session.flush()
+
+        dl = await client.get(f"/api/v1/study-content/{record.id}/download")
+        st = await client.get(f"/api/v1/study-content/{record.id}/stream")
+        assert dl.status_code == 200
+        assert st.status_code == 200
+        assert dl.content == st.content == b"stream-bytes"
+
+    @pytest.mark.asyncio(loop_scope="session")
     async def test_download_presentation_json(self, client, db_session, seed_exam):
         record = StudyContent(
             exam_id=seed_exam["exam_id"],
@@ -214,7 +257,7 @@ class TestStudyContentPipeline:
                 "slides_data": {"slides": [{"title": "One", "bullets": ["Two"]}]},
             }
 
-        async def _fake_synthesize_speech(_text: str):
+        async def _fake_synthesize_speech(_text: str, **_kwargs: object):
             return b"mp3-bytes"
 
         async def _fake_put_object_bytes(_object_name, _payload, _content_type):

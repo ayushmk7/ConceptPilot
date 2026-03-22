@@ -242,6 +242,7 @@ class TestRouteExistence:
         ("GET", "/api/v1/exams/{exam_id}/scores/summary"),
         ("GET", "/api/v1/exams/{exam_id}/mapping"),
         ("GET", "/api/v1/exams/{exam_id}/graph"),
+        ("POST", "/api/v1/exams/{exam_id}/graph/expand"),
         ("GET", "/api/v1/exams/{exam_id}/graph/versions"),
         ("PATCH", "/api/v1/exams/{exam_id}/graph"),
         ("POST", "/api/v1/exams/{exam_id}/compute"),
@@ -466,6 +467,41 @@ class TestGraphVersions:
         assert "node_count" in v
         assert "edge_count" in v
         assert "created_at" in v
+
+
+# ---------------------------------------------------------------------------
+# Graph expand (AI subtopics) — mocked Anthropic path via router
+# ---------------------------------------------------------------------------
+
+class TestGraphExpand:
+
+    @pytest.mark.asyncio(loop_scope="session")
+    async def test_expand_returns_new_nodes_and_persists_suggestion(self, client, seed_exam, monkeypatch):
+        async def fake_suggest_subtopic_expansion(**kwargs):
+            return {
+                "nodes": [{"id": "new_sub", "label": "New subtopic", "depth": 1}],
+                "edges": [{"source": "C1", "target": "new_sub", "weight": 0.6}],
+                "model": "claude-test",
+                "prompt_version": "v1.0",
+                "token_usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+                "latency_ms": 5.0,
+                "error": None,
+            }
+
+        monkeypatch.setattr(
+            "app.routers.graph.suggest_subtopic_expansion",
+            fake_suggest_subtopic_expansion,
+        )
+        eid = seed_exam["exam_id"]
+        resp = await client.post(
+            f"/api/v1/exams/{eid}/graph/expand",
+            json={"concept_id": "C1", "max_depth": 2, "context": ""},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert any(n["id"] == "new_sub" for n in data["new_nodes"])
+        assert data.get("suggestion_id") is not None
 
 
 # ---------------------------------------------------------------------------

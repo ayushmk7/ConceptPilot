@@ -9,11 +9,15 @@ import {
   deleteCanvasWorkspace,
   type CanvasWorkspaceApi,
 } from '@/lib/canvas-api';
+import { getFetchErrorMessage } from '@/lib/api';
+import { useStudentBootstrapOptional } from '@/lib/student-context';
 
 export default function CanvasProjectsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const roleSuffix = searchParams.get('role') === 'student' ? '?role=student' : '';
+  const isStudent = searchParams.get('role') === 'student';
+  const roleSuffix = isStudent ? '?role=student' : '';
+  const boot = useStudentBootstrapOptional();
   const [projects, setProjects] = useState<CanvasWorkspaceApi[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,15 +28,28 @@ export default function CanvasProjectsPage() {
       const rows = await listCanvasWorkspaces();
       setProjects(rows);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load workspaces');
+      setError(getFetchErrorMessage(e, 'Failed to load workspaces'));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    if (isStudent) {
+      setLoading(false);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, isStudent]);
+
+  /* Student has a single bootstrapped canvas — skip instructor list API */
+  useEffect(() => {
+    if (!isStudent) return;
+    if (!boot || boot.loading) return;
+    if (boot.canvasProjectId) {
+      router.replace(`/canvas/${boot.canvasProjectId}?role=student`);
+    }
+  }, [isStudent, boot, router]);
 
   const createProject = async () => {
     setError(null);
@@ -40,7 +57,7 @@ export default function CanvasProjectsPage() {
       const row = await createCanvasWorkspace();
       router.push(`/canvas/${row.id}${roleSuffix}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create workspace');
+      setError(getFetchErrorMessage(e, 'Failed to create workspace'));
     }
   };
 
@@ -50,7 +67,7 @@ export default function CanvasProjectsPage() {
       await deleteCanvasWorkspace(id);
       setProjects((prev) => prev.filter((p) => p.id !== id));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete workspace');
+      setError(getFetchErrorMessage(e, 'Failed to delete workspace'));
     }
   };
 
@@ -81,7 +98,14 @@ export default function CanvasProjectsPage() {
           </div>
         )}
 
-        {loading ? (
+        {isStudent ? (
+          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <p className="text-sm">
+              {boot?.loading !== false ? 'Opening your study canvas…' : 'Preparing workspace…'}
+            </p>
+          </div>
+        ) : loading ? (
           <div className="flex justify-center py-24 text-muted-foreground">
             <Loader2 className="w-8 h-8 animate-spin" />
           </div>

@@ -7,7 +7,8 @@ import * as api from '@/lib/api';
 import type { ChatSurface } from '@/lib/api';
 import { useExam } from '@/lib/exam-context';
 import { AssistantMarkdown } from '@/components/chat/AssistantMarkdown';
-import { getCachedStudentReport, getStoredStudentToken } from '@/lib/student-report';
+import { getCachedStudentReport } from '@/lib/student-report';
+import { useStudentBootstrapOptional } from '@/lib/student-context';
 
 const INSTRUCTOR_WELCOME: ChatMessage = {
   id: 'welcome',
@@ -44,16 +45,24 @@ export type ChatAssistantPanelProps = {
 export function ChatAssistantPanel({ surface, initialSessionId, variant = 'dock' }: ChatAssistantPanelProps) {
   const { selectedExamId } = useExam();
   const cachedReport = typeof window !== 'undefined' ? getCachedStudentReport() : null;
-  const reportToken = typeof window !== 'undefined' ? getStoredStudentToken() : null;
+  const studentBoot = useStudentBootstrapOptional();
 
   const effectiveExamId = useMemo(() => {
+    if (surface === 'student' && studentBoot?.examId) {
+      return String(studentBoot.examId);
+    }
     if (surface === 'student' && cachedReport?.exam_id) {
       return String(cachedReport.exam_id);
     }
     return selectedExamId;
-  }, [surface, cachedReport?.exam_id, selectedExamId]);
+  }, [surface, studentBoot?.examId, cachedReport?.exam_id, selectedExamId]);
 
-  const studentChatBlocked = surface === 'student' && !reportToken;
+  const studentChatBlocked =
+    surface === 'student' &&
+    (studentBoot == null ||
+      studentBoot.loading ||
+      !!studentBoot.error ||
+      !String(studentBoot.examId ?? '').trim());
 
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
@@ -148,7 +157,7 @@ export function ChatAssistantPanel({ surface, initialSessionId, variant = 'dock'
         sessionId: chatSessionId,
         examId: effectiveExamId,
         surface,
-        reportToken: surface === 'student' ? reportToken : null,
+        reportToken: null,
       });
       setChatSessionId(sid);
       if (typeof window !== 'undefined') {
@@ -193,10 +202,13 @@ export function ChatAssistantPanel({ surface, initialSessionId, variant = 'dock'
 
   return (
     <div className={rootClass}>
-      {studentChatBlocked && (
+      {studentChatBlocked && surface === 'student' && (
         <div className="px-4 py-2 text-xs text-amber-900 bg-amber-50 border-b border-amber-100 flex-shrink-0">
-          Open your personal report link to enable the study assistant. Chat uses your report token to load only your
-          results.
+          {studentBoot?.loading
+            ? 'Connecting to the shared study workspace…'
+            : studentBoot?.error
+              ? `Could not load student context: ${studentBoot.error}`
+              : 'Student workspace is not ready yet.'}
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">

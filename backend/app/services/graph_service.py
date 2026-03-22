@@ -128,6 +128,16 @@ def apply_patch(
         else:
             G.remove_node(node_id)
 
+    # Remove edges before adding (so reconnect / retarget patches stay acyclic in one request)
+    for edge in patch.remove_edges:
+        if G.has_edge(edge.source, edge.target):
+            G.remove_edge(edge.source, edge.target)
+        else:
+            errors.append(ValidationError(
+                field="remove_edges",
+                message=f"Edge ({edge.source} -> {edge.target}) does not exist",
+            ))
+
     # Add edges
     for edge in patch.add_edges:
         if edge.source not in G.nodes:
@@ -149,16 +159,6 @@ def apply_patch(
             ))
             continue
         G.add_edge(edge.source, edge.target, weight=edge.weight)
-
-    # Remove edges
-    for edge in patch.remove_edges:
-        if G.has_edge(edge.source, edge.target):
-            G.remove_edge(edge.source, edge.target)
-        else:
-            errors.append(ValidationError(
-                field="remove_edges",
-                message=f"Edge ({edge.source} -> {edge.target}) does not exist",
-            ))
 
     if errors:
         return graph_json, False, None, errors

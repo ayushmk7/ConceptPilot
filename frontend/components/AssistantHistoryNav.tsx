@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { MessageSquare, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import type { ChatSurface } from '@/lib/api';
 import { fetchChatSessions, type ChatSessionApi } from '@/lib/api';
-import { getStoredStudentToken } from '@/lib/student-report';
+import { useStudentBootstrapOptional } from '@/lib/student-context';
 
 function formatSessionLabel(s: ChatSessionApi): string {
   const t = (s.title ?? '').trim();
@@ -36,8 +36,10 @@ function AssistantHistoryNavInner({ surface, isCollapsed, examId, variant }: Ass
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const reportToken = typeof window !== 'undefined' ? getStoredStudentToken() : null;
-  const studentBlocked = surface === 'student' && !reportToken;
+  const boot = useStudentBootstrapOptional();
+  const studentExamId = surface === 'student' ? boot?.examId ?? null : null;
+  const studentBlocked =
+    surface === 'student' && (boot?.loading || !!boot?.error || !String(studentExamId ?? '').trim());
 
   const loadSessions = useCallback(async () => {
     if (studentBlocked) {
@@ -49,8 +51,8 @@ function AssistantHistoryNavInner({ surface, isCollapsed, examId, variant }: Ass
     try {
       const rows = await fetchChatSessions({
         surface,
-        examId: surface === 'instructor' ? examId : null,
-        reportToken: surface === 'student' ? reportToken : null,
+        examId: surface === 'instructor' ? examId : studentExamId,
+        reportToken: null,
       });
       setSessions(rows);
     } catch (e) {
@@ -59,7 +61,7 @@ function AssistantHistoryNavInner({ surface, isCollapsed, examId, variant }: Ass
     } finally {
       setLoading(false);
     }
-  }, [surface, examId, reportToken, studentBlocked]);
+  }, [surface, examId, studentExamId, studentBlocked]);
 
   useEffect(() => {
     if (!historyOpen || isCollapsed) return;
@@ -135,7 +137,7 @@ function AssistantHistoryNavInner({ surface, isCollapsed, examId, variant }: Ass
         <div className="pl-2 pr-1 pb-1 border-l border-border/60 ml-4 space-y-0.5 max-h-56 overflow-y-auto">
           {studentBlocked && (
             <p className="text-[11px] text-muted-foreground px-2 py-1.5 leading-snug">
-              Open your personal report link to load chat history.
+              {boot?.loading ? 'Loading workspace…' : boot?.error ? boot.error : 'Student workspace unavailable.'}
             </p>
           )}
           {!studentBlocked && loading && (

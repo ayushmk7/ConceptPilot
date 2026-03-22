@@ -1,14 +1,47 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { StudentLayout } from '@/components/StudentLayout';
 import { DotPattern } from '@/components/svg/DotPattern';
 import { BookOpen, CheckCircle2, Circle, ChevronRight, Headphones, Presentation, Video } from 'lucide-react';
 import Link from 'next/link';
 import { readinessColorFromScore } from '@/lib/theme-colors';
-import { MOCK_STUDY_PLAN } from '@/lib/mock-data';
+import * as api from '@/lib/api';
+import type { StudyPlanStep } from '@/lib/types';
+import { PageLoader } from '@/components/LoadingSkeleton';
 
 export default function StudyPlan() {
-  const plan = MOCK_STUDY_PLAN;
+  const [plan, setPlan] = useState<StudyPlanStep[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const steps = await api.getStudyPlan('', '');
+        if (!cancelled) setPlan(steps);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e && typeof e === 'object' && 'message' in e ? String((e as { message: string }).message) : 'Could not load study plan');
+          setPlan([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <StudentLayout>
+        <PageLoader message="Loading study plan…" />
+      </StudentLayout>
+    );
+  }
 
   return (
     <StudentLayout>
@@ -21,6 +54,14 @@ export default function StudyPlan() {
             <p className="text-sm text-muted-foreground">Ordered by prerequisite dependencies — build foundational concepts before advancing.</p>
           </div>
 
+          {error && <p className="text-sm text-destructive mb-4">{error}</p>}
+
+          {plan.length === 0 && !error && (
+            <p className="text-sm text-muted-foreground mb-6">
+              No study plan yet. Upload scores and mapping from the Upload page, then run compute.
+            </p>
+          )}
+
           <div className="card-elevated p-5 mb-6 animate-fade-in-up delay-100">
             <div className="flex items-center gap-4">
               <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
@@ -28,7 +69,7 @@ export default function StudyPlan() {
               </div>
               <div>
                 <div className="text-sm font-medium text-foreground">{plan.length} concepts to review</div>
-                <div className="text-xs text-muted-foreground">Estimated study time: 4–6 hours &bull; Focus on steps in order for best results</div>
+                <div className="text-xs text-muted-foreground">Focus on steps in order for best results.</div>
               </div>
             </div>
           </div>
@@ -110,11 +151,6 @@ export default function StudyPlan() {
                 <div className="text-xs text-muted-foreground">Narrated slides covering your weak areas</div>
               </Link>
             </div>
-          </div>
-
-          <div className="mt-6 card-elevated p-5 animate-fade-in-up delay-500">
-            <h3 className="text-sm font-semibold text-primary mb-1">Need help?</h3>
-            <p className="text-xs text-secondary-text">Contact your instructor or TA for additional guidance: Prof. Smith (smith@umich.edu)</p>
           </div>
 
           <div className="mt-4 text-center">

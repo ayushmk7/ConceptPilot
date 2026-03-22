@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -86,6 +87,25 @@ class Project(Base):
 
     exam = relationship("Exam", back_populates="projects")
     study_contents = relationship("StudyContent", back_populates="project")
+
+    __table_args__ = (Index("ix_projects_exam_id", "exam_id"),)
+
+
+class StudentWorkspace(Base):
+    """Anonymous student surface: ties an exam to a canvas project and synthetic learner id."""
+
+    __tablename__ = "student_workspaces"
+
+    exam_id = Column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="CASCADE"), primary_key=True)
+    canvas_project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("canvas_projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    student_external_id = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    exam = relationship("Exam", backref="student_workspace", uselist=False)
 
 
 class CanvasWorkspace(Base):
@@ -433,6 +453,12 @@ class StudyContent(Base):
     exam = relationship("Exam", back_populates="study_contents")
     project = relationship("Project", back_populates="study_contents")
 
+    __table_args__ = (
+        Index("ix_study_content_exam_id", "exam_id"),
+        Index("ix_study_content_project_id", "project_id"),
+        Index("ix_study_content_status", "status"),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Chat (agentic AI assistant)
@@ -453,6 +479,11 @@ class ChatSession(Base):
 
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan",
                             order_by="ChatMessage.created_at")
+
+    __table_args__ = (
+        Index("ix_chat_sessions_surface", "surface"),
+        Index("ix_chat_sessions_exam_surface_student", "exam_id", "surface", "student_id_external"),
+    )
 
 
 class ChatMessage(Base):

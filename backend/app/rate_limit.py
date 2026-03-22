@@ -69,3 +69,8 @@ async def enforce_instructor_write_limit(request: Request) -> None:
 
         bucket["count"] = int(bucket["count"]) + 1
         bucket["last_seen"] = now
+
+
+async def enforce_student_write_limit(request: Request) -> None:
+    """Same limits as instructor writes; used for anonymous student workspace uploads."""
+    await enforce_instructor_write_limit(request)

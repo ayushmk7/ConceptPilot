@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { StudentProvider } from '@/lib/student-context';
 
 export const metadata: Metadata = {
   title: 'AI Assistant — ConceptPilot',
@@ -6,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function AssistantStudentLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <StudentProvider>{children}</StudentProvider>;
 }

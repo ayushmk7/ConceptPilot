@@ -11,7 +11,7 @@ export const DEFAULT_CANVAS_NODES: Node[] = [
     type: 'chat',
     position: { x: 250, y: 100 },
     style: { width: 420, height: 520 },
-    data: { title: 'Study Session', skill: 'Tutor', messages: [] },
+    data: { title: 'Chat', skill: 'Tutor', messages: [] },
   },
   {
     id: '2',
