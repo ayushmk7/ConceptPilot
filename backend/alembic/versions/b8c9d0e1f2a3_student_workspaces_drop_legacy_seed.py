@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 revision: str = "b8c9d0e1f2a3"
 down_revision: Union[str, None] = "f1a2b3c4d5e6"
@@ -21,16 +22,19 @@ LEGACY_CANVAS = "a0000003-0000-4000-8000-000000000001"
 
 
 def upgrade() -> None:
-    op.create_table(
-        "student_workspaces",
-        sa.Column("exam_id", sa.UUID(), nullable=False),
-        sa.Column("canvas_project_id", sa.UUID(), nullable=False),
-        sa.Column("student_external_id", sa.String(length=255), nullable=False),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(["canvas_project_id"], ["canvas_projects.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["exam_id"], ["exams.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("exam_id"),
-    )
+    bind = op.get_bind()
+    insp = inspect(bind)
+    if "student_workspaces" not in insp.get_table_names():
+        op.create_table(
+            "student_workspaces",
+            sa.Column("exam_id", sa.UUID(), nullable=False),
+            sa.Column("canvas_project_id", sa.UUID(), nullable=False),
+            sa.Column("student_external_id", sa.String(length=255), nullable=False),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.ForeignKeyConstraint(["canvas_project_id"], ["canvas_projects.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["exam_id"], ["exams.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("exam_id"),
+        )
     # Legacy fixed-UUID seed from f1a2b3c4d5e6 (exam cascades to dependent rows).
     op.execute(f"DELETE FROM exams WHERE id = '{LEGACY_EXAM}'::uuid;")
     op.execute(f"DELETE FROM courses WHERE id = '{LEGACY_COURSE}'::uuid;")
@@ -38,4 +42,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("student_workspaces")
+    bind = op.get_bind()
+    insp = inspect(bind)
+    if "student_workspaces" in insp.get_table_names():
+        op.drop_table("student_workspaces")
