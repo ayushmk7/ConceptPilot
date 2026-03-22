@@ -8,13 +8,11 @@ import {
   Upload,
   FileText,
   Sparkles,
-  MessageSquare,
   ChevronRight,
   ChevronLeft,
-  GitBranch,
-  Headphones,
 } from 'lucide-react';
 import { useExam } from '@/lib/exam-context';
+import { AssistantHistoryNav } from '@/components/AssistantHistoryNav';
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -36,7 +34,10 @@ export function Sidebar() {
     { path: '/suggestions', label: 'AI Suggestions', icon: Sparkles },
   ];
 
-  const isActive = (path: string) => (path === '/canvas' ? pathname.startsWith('/canvas') : pathname === path);
+  const isActive = (path: string) => {
+    if (path === '/canvas') return pathname.startsWith('/canvas');
+    return pathname === path;
+  };
 
   return (
     <div className={`hidden md:flex bg-gradient-to-b from-sidebar to-sidebar border-r border-border transition-all duration-300 flex-col ${isCollapsed ? 'w-14' : 'w-60'}`}>
@@ -101,6 +102,12 @@ export function Sidebar() {
               </Link>
             );
           })}
+          <AssistantHistoryNav
+            surface="instructor"
+            variant="instructor"
+            isCollapsed={isCollapsed}
+            examId={selectedExamId}
+          />
         </nav>
       </div>
 

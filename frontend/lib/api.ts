@@ -903,10 +903,57 @@ const CHAT_API_TIMEOUT_MS = 300_000;
 
 const CHAT_SESSION_STORAGE_PREFIX = 'conceptpilot_chat_session_';
 
-/** sessionStorage key for persisting chat session id per selected exam. */
-export function chatSessionStorageKey(examId?: string | null): string {
+export type ChatSurface = 'instructor' | 'student';
+
+/** sessionStorage key for persisting chat session id per exam and surface (student vs instructor). */
+export function chatSessionStorageKey(examId: string | null | undefined, surface: ChatSurface): string {
   const raw = examId != null ? String(examId).trim() : '';
-  return `${CHAT_SESSION_STORAGE_PREFIX}${raw.length > 0 ? raw : 'none'}`;
+  const examPart = raw.length > 0 ? raw : 'none';
+  return `${CHAT_SESSION_STORAGE_PREFIX}${surface}_${examPart}`;
+}
+
+export interface ChatSessionMessageApi {
+  id: string;
+  role: string;
+  content: string | null;
+  created_at: string;
+}
+
+/** Row from `GET /chat/sessions`. */
+export interface ChatSessionApi {
+  id: string;
+  exam_id: string | null;
+  surface: string;
+  title: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** List chat sessions (instructor: optional exam filter; student: requires report_token). */
+export async function fetchChatSessions(options: {
+  surface: ChatSurface;
+  examId?: string | null;
+  reportToken?: string | null;
+}): Promise<ChatSessionApi[]> {
+  const params = new URLSearchParams();
+  params.set('surface', options.surface);
+  const exam = options.examId != null ? String(options.examId).trim() : '';
+  if (exam.length > 0) {
+    params.set('exam_id', exam);
+  }
+  if (options.surface === 'student') {
+    const token = options.reportToken != null ? String(options.reportToken).trim() : '';
+    if (token.length > 0) {
+      params.set('report_token', token);
+    }
+  }
+  return request<ChatSessionApi[]>(`/chat/sessions?${params.toString()}`);
+}
+
+/** Load persisted messages for a chat session (user + assistant rows only from API). */
+export async function fetchChatSessionMessages(sessionId: string): Promise<ChatSessionMessageApi[]> {
+  return request<ChatSessionMessageApi[]>(`/chat/sessions/${encodeURIComponent(sessionId)}/messages`);
 }
 
 /**
@@ -915,7 +962,12 @@ export function chatSessionStorageKey(examId?: string | null): string {
  */
 export async function sendChatMessage(
   lastUserText: string,
-  options?: { sessionId?: string | null; examId?: string | null },
+  options?: {
+    sessionId?: string | null;
+    examId?: string | null;
+    surface?: ChatSurface;
+    reportToken?: string | null;
+  },
 ): Promise<{ message: ChatMessage; sessionId: string }> {
   const trimmed = lastUserText.trim();
   if (!trimmed) {
@@ -924,6 +976,18 @@ export async function sendChatMessage(
   const rawExam = options?.examId != null ? String(options.examId).trim() : '';
   const examPayload = rawExam.length > 0 ? rawExam : null;
   const sid = options?.sessionId != null ? String(options.sessionId).trim() : '';
+  const surface: ChatSurface = options?.surface ?? 'instructor';
+  const tokenRaw = options?.reportToken != null ? String(options.reportToken).trim() : '';
+  const reportPayload = tokenRaw.length > 0 ? tokenRaw : null;
+
+  const quickJsonBody: Record<string, unknown> = {
+    message: trimmed,
+    exam_id: examPayload,
+    surface,
+  };
+  if (surface === 'student' && reportPayload) {
+    quickJsonBody.report_token = reportPayload;
+  }
 
   const res = sid
     ? await request<{ assistant_message: string; session_id: string }>(`/chat/sessions/${sid}/messages`, {
@@ -931,15 +995,13 @@ export async function sendChatMessage(
         jsonBody: {
           message: trimmed,
           exam_id: examPayload,
+          surface,
         },
         timeoutMs: CHAT_API_TIMEOUT_MS,
       })
     : await request<{ assistant_message: string; session_id: string }>('/chat/quick', {
         method: 'POST',
-        jsonBody: {
-          message: trimmed,
-          exam_id: examPayload,
-        },
+        jsonBody: quickJsonBody,
         timeoutMs: CHAT_API_TIMEOUT_MS,
       });
 

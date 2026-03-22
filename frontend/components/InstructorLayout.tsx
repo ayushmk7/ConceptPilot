@@ -10,19 +10,25 @@ const ChatAssistant = dynamic(
   { ssr: false },
 );
 
-export function InstructorLayout({ children }: { children: React.ReactNode }) {
+export function InstructorLayout({
+  children,
+  showChatDock = true,
+}: {
+  children: React.ReactNode;
+  showChatDock?: boolean;
+}) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopNav />
-      <div className="flex flex-1">
+      <div className="flex flex-1 min-h-0">
         <Sidebar />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto min-h-0 flex flex-col">
           <ErrorBoundary>
             {children}
           </ErrorBoundary>
         </main>
       </div>
-      <ChatAssistant />
+      {showChatDock ? <ChatAssistant surface="instructor" /> : null}
     </div>
   );
 }

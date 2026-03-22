@@ -81,6 +81,7 @@ export async function deleteCanvasWorkspace(id: string): Promise<void> {
 export interface ChatSession {
   id: string;
   exam_id: string | null;
+  surface?: string;
   title: string | null;
   created_by: string;
   created_at: string;
@@ -106,21 +107,45 @@ export interface ChatSendResponse {
 /*  Chat API calls                                                     */
 /* ------------------------------------------------------------------ */
 
-export function createChatSession(examId?: string) {
+export type CanvasChatSurface = 'instructor' | 'student';
+
+export function createChatSession(
+  examId?: string,
+  opts?: { surface?: CanvasChatSurface; reportToken?: string | null },
+) {
+  const surface = opts?.surface ?? 'instructor';
+  const body: Record<string, unknown> = {
+    exam_id: examId ?? null,
+    title: null,
+    surface,
+  };
+  if (surface === 'student' && opts?.reportToken) {
+    body.report_token = opts.reportToken;
+  }
   return apiFetch<ChatSession>('/chat/sessions', {
     method: 'POST',
-    body: JSON.stringify({ exam_id: examId ?? null, title: null }),
+    jsonBody: body,
   });
 }
 
 export function getSessionMessages(sessionId: string) {
-  return apiFetch<ChatMessage[]>(`/chat/sessions/${sessionId}/messages`);
+  return apiFetch<ChatMessage[]>(`/chat/sessions/${encodeURIComponent(sessionId)}/messages`);
 }
 
-export function sendMessage(sessionId: string, message: string, examId?: string) {
-  return apiFetch<ChatSendResponse>(`/chat/sessions/${sessionId}/messages`, {
+export function sendMessage(
+  sessionId: string,
+  message: string,
+  examId?: string,
+  opts?: { surface?: CanvasChatSurface; reportToken?: string | null },
+) {
+  const surface = opts?.surface ?? 'instructor';
+  return apiFetch<ChatSendResponse>(`/chat/sessions/${encodeURIComponent(sessionId)}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ message, exam_id: examId ?? null }),
+    jsonBody: {
+      message,
+      exam_id: examId ?? null,
+      surface,
+    },
   });
 }
 

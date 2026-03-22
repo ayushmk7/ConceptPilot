@@ -38,6 +38,17 @@ async def _chat_test_engine():
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text("ALTER TABLE exams ADD COLUMN IF NOT EXISTS state VARCHAR(20)"))
         await conn.execute(text("ALTER TABLE study_content ADD COLUMN IF NOT EXISTS project_id UUID"))
+        await conn.execute(
+            text(
+                "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS surface VARCHAR(20) "
+                "NOT NULL DEFAULT 'instructor'"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS student_id_external VARCHAR(255)"
+            )
+        )
     yield engine
     await engine.dispose()
 
@@ -75,3 +86,46 @@ async def test_create_chat_session_returns_id(chat_client):
     data = res.json()
     assert "id" in data
     assert data.get("created_by") == settings.CHAT_DEFAULT_CREATED_BY
+    assert data.get("surface") == "instructor"
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_create_student_session_requires_report_token(chat_client):
+    res = await chat_client.post("/chat/sessions", json={"surface": "student"})
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_execute_tool_student_blocks_instructor_only_tool(chat_db_session):
+    import json
+    from uuid import uuid4
+
+    from app.services.chat_service import execute_tool
+
+    out = await execute_tool(
+        "get_student_list",
+        {"exam_id": str(uuid4())},
+        chat_db_session,
+        session_surface="student",
+        session_student_id="S001",
+    )
+    assert json.loads(out)["error"] == "not_permitted"
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_execute_tool_student_overrides_student_id(chat_db_session):
+    import json
+    from uuid import uuid4
+
+    from app.services.chat_service import execute_tool
+
+    out = await execute_tool(
+        "get_student_readiness",
+        {"exam_id": str(uuid4()), "student_id": "OTHER"},
+        chat_db_session,
+        session_surface="student",
+        session_student_id="BOUND",
+    )
+    payload = json.loads(out)
+    # Model-supplied OTHER must not be honored; tool runs for BOUND only.
+    assert "OTHER" not in str(payload)

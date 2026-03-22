@@ -6,6 +6,7 @@ on the full ConceptPilot system.
 """
 
 import logging
+import uuid as uuid_mod
 from typing import Optional
 from uuid import UUID
 
@@ -16,7 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
-from app.models.models import ChatMessage, ChatSession, Exam
+from app.models.models import ChatMessage, ChatSession, Exam, StudentToken
 from app.schemas.schemas import (
     ChatMessageResponse,
     ChatSendRequest,
@@ -29,6 +30,22 @@ from app.services.chat_service import run_agent_turn
 logger = logging.getLogger("conceptpilot.chat")
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
+
+async def _lookup_student_token(db: AsyncSession, token_str: str) -> StudentToken:
+    """Resolve a report permalink token to a StudentToken row."""
+    raw = (token_str or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="report_token is required for student chat")
+    try:
+        tid = uuid_mod.UUID(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid report token format") from exc
+    result = await db.execute(select(StudentToken).where(StudentToken.token == tid))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Report token not found")
+    return row
 
 
 def _require_anthropic_for_chat() -> None:
@@ -45,13 +62,28 @@ async def create_session(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new chat session, optionally scoped to an exam."""
-    if body.exam_id:
+    exam_id: Optional[UUID] = body.exam_id
+    student_id: Optional[str] = None
+    surface = body.surface
+
+    if surface == "student":
+        token_row = await _lookup_student_token(db, body.report_token or "")
+        exam_id = token_row.exam_id
+        if body.exam_id and body.exam_id != token_row.exam_id:
+            raise HTTPException(
+                status_code=400,
+                detail="exam_id does not match the report token's exam",
+            )
+        student_id = token_row.student_id_external
+    elif body.exam_id:
         exam = await db.get(Exam, body.exam_id)
         if not exam:
             raise HTTPException(status_code=404, detail="Exam not found")
 
     session = ChatSession(
-        exam_id=body.exam_id,
+        exam_id=exam_id,
+        surface=surface,
+        student_id_external=student_id,
         title=body.title or None,
         created_by=settings.CHAT_DEFAULT_CREATED_BY,
     )
@@ -64,12 +96,23 @@ async def create_session(
 @router.get("/sessions", response_model=list[ChatSessionResponse])
 async def list_sessions(
     exam_id: Optional[UUID] = Query(None),
+    surface: str = Query("instructor"),
+    report_token: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all chat sessions, optionally filtered by exam."""
+    """List chat sessions. Student sessions require a valid report_token (never listed without it)."""
     q = select(ChatSession).order_by(ChatSession.updated_at.desc())
-    if exam_id:
-        q = q.where(ChatSession.exam_id == exam_id)
+    if surface == "student":
+        token_row = await _lookup_student_token(db, report_token or "")
+        q = q.where(ChatSession.surface == "student")
+        q = q.where(ChatSession.exam_id == token_row.exam_id)
+        q = q.where(ChatSession.student_id_external == token_row.student_id_external)
+        if exam_id and exam_id != token_row.exam_id:
+            raise HTTPException(status_code=400, detail="exam_id does not match report token")
+    else:
+        q = q.where(ChatSession.surface == "instructor")
+        if exam_id:
+            q = q.where(ChatSession.exam_id == exam_id)
     result = await db.execute(q)
     return result.scalars().all()
 
@@ -132,8 +175,13 @@ async def send_message(
     if not session:
         raise HTTPException(status_code=404, detail="Chat session not found")
 
-    if body.exam_id and body.exam_id != session.exam_id:
-        session.exam_id = body.exam_id
+    if body.exam_id is not None and session.exam_id is not None and body.exam_id != session.exam_id:
+        raise HTTPException(
+            status_code=400,
+            detail="exam_id does not match this chat session",
+        )
+    if body.surface != session.surface:
+        raise HTTPException(status_code=400, detail="surface does not match this chat session")
 
     _require_anthropic_for_chat()
     try:
@@ -163,8 +211,30 @@ async def quick_chat(
     db: AsyncSession = Depends(get_db),
 ):
     """One-shot chat: creates a session and sends a message in one call."""
+    exam_id: Optional[UUID] = body.exam_id
+    student_id: Optional[str] = None
+    surface = body.surface
+
+    if surface == "student":
+        if not (body.report_token or "").strip():
+            raise HTTPException(status_code=400, detail="report_token is required for student chat")
+        token_row = await _lookup_student_token(db, body.report_token or "")
+        exam_id = token_row.exam_id
+        if body.exam_id and body.exam_id != token_row.exam_id:
+            raise HTTPException(
+                status_code=400,
+                detail="exam_id does not match the report token's exam",
+            )
+        student_id = token_row.student_id_external
+    elif body.exam_id:
+        exam = await db.get(Exam, body.exam_id)
+        if not exam:
+            raise HTTPException(status_code=404, detail="Exam not found")
+
     session = ChatSession(
-        exam_id=body.exam_id,
+        exam_id=exam_id,
+        surface=surface,
+        student_id_external=student_id,
         title=body.message[:80] if body.message else None,
         created_by=settings.CHAT_DEFAULT_CREATED_BY,
     )
