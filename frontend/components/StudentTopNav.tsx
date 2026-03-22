@@ -57,7 +57,7 @@ export function StudentTopNav() {
         </Sheet>
       </div>
 
-      <Link href="/student" className="flex items-center gap-2.5 mr-6 sm:mr-10">
+      <Link href="/" className="flex items-center gap-2.5 mr-6 sm:mr-10">
         <Image src="/logo/conceptpilot-logo.png" alt="ConceptPilot logo" width={26} height={19} className="rounded-sm" />
         <span className="text-lg font-semibold tracking-tight">ConceptPilot</span>
       </Link>
