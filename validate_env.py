@@ -306,6 +306,17 @@ async def async_main(env_file: Path) -> int:
         _warn(el_detail)
         warnings.append(f"elevenlabs: {el_detail}")
 
+    key_ok = bool(settings.ELEVENLABS_API_KEY and len(settings.ELEVENLABS_API_KEY) > 10)
+    voice_ok = bool(str(settings.ELEVENLABS_VOICE_ID or "").strip())
+    if key_ok and not voice_ok:
+        w = "ELEVENLABS_VOICE_ID is empty; audio and video_walkthrough study content will fail at TTS"
+        _warn(w)
+        warnings.append(w)
+    elif voice_ok and not key_ok:
+        w = "ELEVENLABS_API_KEY is missing or too short; ElevenLabs TTS will not work"
+        _warn(w)
+        warnings.append(w)
+
     _print_section("Redis (async compute queue)")
     r_ok, r_detail = _check_redis(settings)
     if r_detail.startswith("skipped"):

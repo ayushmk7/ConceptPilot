@@ -143,6 +143,28 @@ class TestStudyContentEndpoints:
         assert resp.headers["content-type"].startswith("audio/mpeg")
 
     @pytest.mark.asyncio(loop_scope="session")
+    async def test_download_presentation_json(self, client, db_session, seed_exam):
+        record = StudyContent(
+            exam_id=seed_exam["exam_id"],
+            content_type="presentation",
+            title="Slides only",
+            source_context={},
+            status="completed",
+            transcript="Intro",
+            slides_data={"slides": [{"title": "A", "bullets": ["b"]}]},
+        )
+        db_session.add(record)
+        await db_session.flush()
+
+        resp = await client.get(f"/api/v1/study-content/{record.id}/download")
+        assert resp.status_code == 200
+        assert "application/json" in resp.headers["content-type"]
+        data = resp.json()
+        assert data["title"] == "Slides only"
+        assert data["transcript"] == "Intro"
+        assert data["slides_data"]["slides"][0]["title"] == "A"
+
+    @pytest.mark.asyncio(loop_scope="session")
     async def test_project_scoped_study_content(self, client, db_session, seed_exam, monkeypatch):
         from app.routers import projects as projects_router
 
@@ -201,6 +223,7 @@ class TestStudyContentPipeline:
         monkeypatch.setattr(scs, "_call_claude_content_outline", _fake_claude_content_outline)
         monkeypatch.setattr(scs, "synthesize_speech", _fake_synthesize_speech)
         monkeypatch.setattr(scs, "put_object_bytes", _fake_put_object_bytes)
+        monkeypatch.setattr(scs.settings, "VULTR_OBJECT_STORAGE_BUCKET", "test-bucket", raising=False)
 
         async with scs.async_session() as setup_db:
             course = Course(name="Committed course")
@@ -228,6 +251,6 @@ class TestStudyContentPipeline:
             assert stored is not None
             assert stored.status == "completed"
             assert stored.transcript is not None
-            assert stored.storage_key and stored.storage_key.startswith("file://")
-            saved = Path(stored.storage_key.replace("file://", "", 1))
+            assert stored.storage_key and stored.storage_key.startswith("s3://test-bucket/")
+            saved = Path(scs._local_audio_path(content_id))
         assert saved.exists()

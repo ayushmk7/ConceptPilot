@@ -1,9 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { AssistantMarkdown } from '@/components/chat/AssistantMarkdown';
 import { GitBranch, Check } from 'lucide-react';
 
 interface MessageBubbleProps {
@@ -57,35 +55,7 @@ export function MessageBubble({
         {isUser ? (
           <p className="whitespace-pre-wrap">{content}</p>
         ) : (
-          <div className="prose prose-sm max-w-none prose-p:my-1 prose-pre:my-2">
-            <ReactMarkdown
-              components={{
-                code({ className, children, ...props }) {
-                  const match = /language-(\w+)/.exec(className || '');
-                  const codeString = String(children).replace(/\n$/, '');
-                  if (match) {
-                    return (
-                      <SyntaxHighlighter
-                        style={oneLight}
-                        language={match[1]}
-                        PreTag="div"
-                        className="rounded-md text-xs !my-2"
-                      >
-                        {codeString}
-                      </SyntaxHighlighter>
-                    );
-                  }
-                  return (
-                    <code className="bg-muted px-1 py-0.5 rounded text-xs" {...props}>
-                      {children}
-                    </code>
-                  );
-                },
-              }}
-            >
-              {content}
-            </ReactMarkdown>
-          </div>
+          <AssistantMarkdown content={content} />
         )}
 
         {/* Branch-from-here action: right side for assistant, left side for user */}

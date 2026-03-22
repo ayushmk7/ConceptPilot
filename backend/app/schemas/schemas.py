@@ -611,7 +611,16 @@ class ExportListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class StudyContentCreateRequest(BaseModel):
-    content_type: str = Field(..., pattern="^(audio|presentation|video_walkthrough)$")
+    content_type: str = Field(
+        ...,
+        pattern="^(audio|presentation|video_walkthrough)$",
+        description=(
+            "audio: ElevenLabs MP3 plus slides_data JSON. "
+            "presentation: transcript and slides_data only (no TTS; export JSON via GET .../download). "
+            "video_walkthrough: same MP3 pipeline as audio (no rendered video); "
+            "use transcript plus slides_data on the client if you want a slide-synced experience."
+        ),
+    )
     title: str = Field(..., min_length=1, max_length=255)
     focus_concepts: list[str] = []
     include_weak_concepts: bool = True

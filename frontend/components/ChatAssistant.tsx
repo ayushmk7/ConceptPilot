@@ -5,6 +5,7 @@ import { MessageSquare, Send, X, Minimize2, Maximize2, Loader2, Bot, User, Spark
 import type { ApiError, ChatMessage } from '@/lib/types';
 import * as api from '@/lib/api';
 import { useExam } from '@/lib/exam-context';
+import { AssistantMarkdown } from '@/components/chat/AssistantMarkdown';
 
 /** Stable for SSR + client first paint — avoids hydration mismatch from Date in useState init. */
 const WELCOME_MESSAGE: ChatMessage = {
@@ -21,6 +22,7 @@ export function ChatAssistant() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -28,6 +30,12 @@ export function ChatAssistant() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = sessionStorage.getItem(api.chatSessionStorageKey(selectedExamId));
+    setChatSessionId(stored && stored.length > 0 ? stored : null);
+  }, [selectedExamId]);
 
   const sendUserMessage = async (text: string) => {
     const trimmed = text.trim();
@@ -45,7 +53,14 @@ export function ChatAssistant() {
     setIsLoading(true);
 
     try {
-      const reply = await api.sendChatMessage([...messages, userMsg], selectedExamId);
+      const { message: reply, sessionId: sid } = await api.sendChatMessage(trimmed, {
+        sessionId: chatSessionId,
+        examId: selectedExamId,
+      });
+      setChatSessionId(sid);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(api.chatSessionStorageKey(selectedExamId), sid);
+      }
       setMessages((prev) => [...prev, reply]);
     } catch (err) {
       const detail =
@@ -147,18 +162,11 @@ export function ChatAssistant() {
                       : 'bg-muted text-foreground'
                   }`}
                 >
-                  {msg.content.split('\n').map((line, i) => (
-                    <span key={i}>
-                      {line.split(/(\*\*.*?\*\*)/).map((part, j) =>
-                        part.startsWith('**') && part.endsWith('**') ? (
-                          <strong key={j}>{part.slice(2, -2)}</strong>
-                        ) : (
-                          part
-                        )
-                      )}
-                      {i < msg.content.split('\n').length - 1 && <br />}
-                    </span>
-                  ))}
+                  {msg.role === 'user' ? (
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  ) : (
+                    <AssistantMarkdown content={msg.content} />
+                  )}
                 </div>
                 {msg.role === 'user' && (
                   <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center flex-shrink-0 mt-0.5">

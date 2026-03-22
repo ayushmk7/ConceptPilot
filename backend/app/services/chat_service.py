@@ -12,10 +12,12 @@ from typing import Any, Optional
 from uuid import UUID
 
 import anthropic
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.utils.text_sanitize import strip_emojis
 from app.models.models import (
     ChatMessage,
     ChatSession,
@@ -42,12 +44,25 @@ _client: Optional[anthropic.AsyncAnthropic] = None
 def _get_client() -> anthropic.AsyncAnthropic:
     global _client
     if _client is None:
+        # Explicit read + connect caps so a bad network cannot hang indefinitely.
+        timeout = httpx.Timeout(
+            float(settings.ANTHROPIC_TIMEOUT_SECONDS),
+            connect=15.0,
+        )
         _client = anthropic.AsyncAnthropic(
             api_key=settings.ANTHROPIC_API_KEY,
-            timeout=60,
-            max_retries=2,
+            timeout=timeout,
+            max_retries=settings.ANTHROPIC_MAX_RETRIES,
         )
     return _client
+
+
+def _chat_model() -> str:
+    return settings.ANTHROPIC_CHAT_MODEL or settings.ANTHROPIC_MODEL
+
+
+def _chat_max_tokens() -> int:
+    return settings.ANTHROPIC_CHAT_MAX_TOKENS or settings.ANTHROPIC_MAX_TOKENS
 
 
 SYSTEM_PROMPT = """You are the ConceptPilot AI Assistant — an expert educational analytics agent built into a concept-readiness analysis platform for university instructors.
@@ -71,7 +86,8 @@ IMPORTANT BEHAVIORAL RULES:
 - Present data clearly with key numbers highlighted. Use tables when comparing multiple items.
 - If the exam_id context is set for the session, use it automatically. Otherwise ask the instructor which exam they mean.
 - Be concise but thorough. Instructors are busy.
-- Never reveal raw database IDs to the instructor — use human-readable names and labels."""
+- Never reveal raw database IDs to the instructor — use human-readable names and labels.
+- Do not use emoji, emoticons, or decorative Unicode symbols in your replies — use plain professional text only."""
 
 
 TOOLS = [
@@ -682,6 +698,7 @@ async def run_agent_turn(
     Returns (assistant_text, list_of_tool_names_called).
     """
     client = _get_client()
+    user_message = strip_emojis(user_message)
 
     user_msg = ChatMessage(
         session_id=session.id,
@@ -701,6 +718,7 @@ async def run_agent_turn(
     system_content = SYSTEM_PROMPT
     if session.exam_id:
         system_content += f"\n\nCurrent exam context: exam_id = {session.exam_id}"
+    system_content = strip_emojis(system_content)
 
     messages: list[dict[str, Any]] = []
 
@@ -736,8 +754,8 @@ async def run_agent_turn(
 
     for _ in range(max_iterations):
         response = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL,
-            max_tokens=settings.ANTHROPIC_MAX_TOKENS,
+            model=_chat_model(),
+            max_tokens=_chat_max_tokens(),
             system=system_content,
             messages=messages,
             tools=TOOLS,
@@ -759,10 +777,13 @@ async def run_agent_turn(
                         "input": block.input,
                     })
 
+            assistant_joined = (
+                strip_emojis("\n".join(assistant_text_parts)) if assistant_text_parts else ""
+            )
             db_assistant_msg = ChatMessage(
                 session_id=session.id,
                 role="assistant",
-                content="\n".join(assistant_text_parts) if assistant_text_parts else "",
+                content=assistant_joined,
                 tool_calls_json=tc_json,
                 token_usage={
                     "prompt_tokens": response.usage.input_tokens,
@@ -775,7 +796,7 @@ async def run_agent_turn(
             assistant_content: list[dict[str, Any]] = []
             for block in response.content:
                 if block.type == "text":
-                    assistant_content.append({"type": "text", "text": block.text})
+                    assistant_content.append({"type": "text", "text": strip_emojis(block.text)})
                 elif block.type == "tool_use":
                     assistant_content.append({
                         "type": "tool_use",
@@ -822,6 +843,7 @@ async def run_agent_turn(
             for block in response.content:
                 if block.type == "text":
                     final_text += block.text
+            final_text = strip_emojis(final_text)
             db_final = ChatMessage(
                 session_id=session.id,
                 role="assistant",
@@ -835,4 +857,7 @@ async def run_agent_turn(
             await db.flush()
             return final_text, tools_called
 
-    return "I've reached the maximum number of tool calls for this turn. Please try a more specific question.", tools_called
+    return (
+        "I've reached the maximum number of tool calls for this turn. Please try a more specific question.",
+        tools_called,
+    )

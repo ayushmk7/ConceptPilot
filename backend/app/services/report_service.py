@@ -7,11 +7,17 @@ Generates student reports with:
   - NO peer comparisons, rankings, or percentile data (PRD exclusions)
 """
 
+import uuid
 from typing import Any, Optional
 
 import numpy as np
 
 from app.services.graph_service import build_graph, get_topological_order
+
+
+def generate_student_token() -> uuid.UUID:
+    """Return a new unique token for `StudentToken.token` (UUID column)."""
+    return uuid.uuid4()
 
 
 def build_student_report(

@@ -14,11 +14,18 @@ class Settings(BaseSettings):
     # --- Anthropic AI ---
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-20250514"
+    # Chat agent only; empty = use ANTHROPIC_MODEL (e.g. set to Haiku for lower latency).
+    ANTHROPIC_CHAT_MODEL: str = ""
     ANTHROPIC_TIMEOUT_SECONDS: int = 60
     ANTHROPIC_MAX_RETRIES: int = 2
     ANTHROPIC_MAX_TOKENS: int = 4096
+    # Chat agent max output tokens; 0 = use ANTHROPIC_MAX_TOKENS.
+    ANTHROPIC_CHAT_MAX_TOKENS: int = 0
 
-    # --- ElevenLabs (study-content TTS; optional until those routes ship) ---
+    # --- Chat sessions (until auth: placeholder owner id) ---
+    CHAT_DEFAULT_CREATED_BY: str = "local"
+
+    # --- ElevenLabs (study-content TTS for audio / video_walkthrough; optional) ---
     ELEVENLABS_API_KEY: str = ""
     ELEVENLABS_VOICE_ID: str = ""
     ELEVENLABS_MODEL_ID: str = "eleven_multilingual_v2"

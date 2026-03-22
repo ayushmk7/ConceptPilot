@@ -44,6 +44,8 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   /** When set, serializes to JSON and sends as body (unless `body` is also set). */
   jsonBody?: unknown;
   body?: RequestInit['body'];
+  /** Abort the request after this many milliseconds (browser has no default fetch timeout). */
+  timeoutMs?: number;
 }
 
 function parseErrorMessage(body: unknown, fallback: string): string {
@@ -63,7 +65,7 @@ function parseErrorMessage(body: unknown, fallback: string): string {
  * Unified fetch for JSON APIs.
  */
 export async function apiFetch<T = unknown>(path: string, init: ApiFetchOptions = {}): Promise<T> {
-  const { jsonBody, headers: initHeaders, body: initBody, ...rest } = init;
+  const { jsonBody, timeoutMs, headers: initHeaders, body: initBody, signal: userSignal, ...rest } = init;
   const headers = new Headers(initHeaders as HeadersInit);
 
   let body: BodyInit | null | undefined = initBody ?? null;
@@ -78,11 +80,29 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchOptions 
 
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
 
+  let abortTimer: ReturnType<typeof setTimeout> | undefined;
+  let signal = userSignal;
+  if (timeoutMs != null && timeoutMs > 0) {
+    const ctrl = new AbortController();
+    abortTimer = setTimeout(() => ctrl.abort(), timeoutMs);
+    signal = ctrl.signal;
+  }
+
   let res: Response;
   try {
-    res = await fetch(url, { ...rest, headers, body: body ?? undefined });
-  } catch {
+    res = await fetch(url, { ...rest, headers, body: body ?? undefined, signal });
+  } catch (e) {
+    const name = e instanceof Error ? e.name : '';
+    if (name === 'AbortError' || (e instanceof DOMException && e.name === 'AbortError')) {
+      throw {
+        status: 0,
+        message:
+          'Request timed out. Ensure the backend is running, reachable at the configured API URL, and Anthropic calls can complete.',
+      } as ApiError;
+    }
     throw { status: 0, message: 'Network error — backend unreachable' } as ApiError;
+  } finally {
+    if (abortTimer !== undefined) clearTimeout(abortTimer);
   }
 
   if (!res.ok) {
@@ -878,25 +898,59 @@ export async function fetchAuthorizedBlob(path: string): Promise<Blob> {
 
 // ── Chat Assistant ──
 
-export async function sendChatMessage(messages: ChatMessage[], examId?: string | null): Promise<ChatMessage> {
-  const last = messages.filter((m) => m.role === 'user').pop();
-  if (!last) {
+/** Browser fetch has no timeout; chat can take multiple Anthropic + tool rounds (align with backend). */
+const CHAT_API_TIMEOUT_MS = 300_000;
+
+const CHAT_SESSION_STORAGE_PREFIX = 'conceptpilot_chat_session_';
+
+/** sessionStorage key for persisting chat session id per selected exam. */
+export function chatSessionStorageKey(examId?: string | null): string {
+  const raw = examId != null ? String(examId).trim() : '';
+  return `${CHAT_SESSION_STORAGE_PREFIX}${raw.length > 0 ? raw : 'none'}`;
+}
+
+/**
+ * Sends the latest user message. Reuses `sessionId` when set so the backend keeps
+ * conversation history; otherwise starts via `/chat/quick`.
+ */
+export async function sendChatMessage(
+  lastUserText: string,
+  options?: { sessionId?: string | null; examId?: string | null },
+): Promise<{ message: ChatMessage; sessionId: string }> {
+  const trimmed = lastUserText.trim();
+  if (!trimmed) {
     throw { status: 400, message: 'No user message' } as ApiError;
   }
-  const rawExam = examId != null ? String(examId).trim() : '';
+  const rawExam = options?.examId != null ? String(options.examId).trim() : '';
   const examPayload = rawExam.length > 0 ? rawExam : null;
-  const res = await request<{ assistant_message: string; session_id: string }>('/chat/quick', {
-    method: 'POST',
-    jsonBody: {
-      message: last.content,
-      exam_id: examPayload,
-    },
-  });
+  const sid = options?.sessionId != null ? String(options.sessionId).trim() : '';
+
+  const res = sid
+    ? await request<{ assistant_message: string; session_id: string }>(`/chat/sessions/${sid}/messages`, {
+        method: 'POST',
+        jsonBody: {
+          message: trimmed,
+          exam_id: examPayload,
+        },
+        timeoutMs: CHAT_API_TIMEOUT_MS,
+      })
+    : await request<{ assistant_message: string; session_id: string }>('/chat/quick', {
+        method: 'POST',
+        jsonBody: {
+          message: trimmed,
+          exam_id: examPayload,
+        },
+        timeoutMs: CHAT_API_TIMEOUT_MS,
+      });
+
   return {
-    id: `msg_${Date.now()}`,
-    role: 'assistant',
-    content: res.assistant_message,
-    timestamp: new Date().toISOString(),
+    sessionId: String(res.session_id),
+    message: {
+      id: `msg_${Date.now()}`,
+      role: 'assistant',
+      content: res.assistant_message,
+      timestamp: new Date().toISOString(),
+    },
   };
 }
 

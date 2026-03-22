@@ -165,11 +165,16 @@ async def run_generation_for_content(content_id: UUID) -> None:
                 audio_bytes = await synthesize_speech(transcript)
                 local_path = _local_audio_path(content.id)
                 local_path.write_bytes(audio_bytes)
-                content.storage_key = f"file://{local_path}"
                 content.duration_seconds = _estimate_duration_seconds(transcript)
 
                 object_key = f"study_content/{content.exam_id}/{content.id}.mp3"
-                await put_object_bytes(object_key, audio_bytes, "audio/mpeg")
+                uploaded = await put_object_bytes(object_key, audio_bytes, "audio/mpeg")
+                bucket = (settings.VULTR_OBJECT_STORAGE_BUCKET or "").strip()
+                if uploaded and bucket:
+                    # Prefer S3 key so downloads work across instances / ephemeral disks.
+                    content.storage_key = f"s3://{bucket}/{object_key}"
+                else:
+                    content.storage_key = f"file://{local_path}"
             else:
                 content.duration_seconds = None
                 content.storage_key = None

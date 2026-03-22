@@ -1,4 +1,4 @@
-"""ElevenLabs integration — P1 config/health probe; P2 will add full TTS pipeline."""
+"""ElevenLabs integration — health probe and TTS for study content (audio / video_walkthrough)."""
 
 from __future__ import annotations
 

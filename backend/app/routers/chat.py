@@ -31,6 +31,14 @@ logger = logging.getLogger("conceptpilot.chat")
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
+def _require_anthropic_for_chat() -> None:
+    if not (settings.ANTHROPIC_API_KEY or "").strip():
+        raise HTTPException(
+            status_code=503,
+            detail="Chat assistant is not configured: set ANTHROPIC_API_KEY in the backend environment.",
+        )
+
+
 @router.post("/sessions", response_model=ChatSessionResponse)
 async def create_session(
     body: ChatSessionCreate,
@@ -45,7 +53,7 @@ async def create_session(
     session = ChatSession(
         exam_id=body.exam_id,
         title=body.title or None,
-        created_by=_user,
+        created_by=settings.CHAT_DEFAULT_CREATED_BY,
     )
     db.add(session)
     await db.flush()
@@ -127,6 +135,7 @@ async def send_message(
     if body.exam_id and body.exam_id != session.exam_id:
         session.exam_id = body.exam_id
 
+    _require_anthropic_for_chat()
     try:
         assistant_text, tools_called = await run_agent_turn(session, body.message, db)
     except Exception as exc:
@@ -157,7 +166,7 @@ async def quick_chat(
     session = ChatSession(
         exam_id=body.exam_id,
         title=body.message[:80] if body.message else None,
-        created_by=_user,
+        created_by=settings.CHAT_DEFAULT_CREATED_BY,
     )
     db.add(session)
     await db.flush()
@@ -169,6 +178,7 @@ async def quick_chat(
     )
     session = result.scalar_one_or_none()
 
+    _require_anthropic_for_chat()
     try:
         assistant_text, tools_called = await run_agent_turn(session, body.message, db)
     except Exception as exc:

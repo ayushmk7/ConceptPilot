@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,8 +112,28 @@ async def download_study_content(
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Study content not found")
+    if item.content_type == "presentation":
+        if item.status != "completed":
+            raise HTTPException(status_code=400, detail="Presentation is not ready yet")
+        if item.transcript is None and not item.slides_data:
+            raise HTTPException(status_code=404, detail="No presentation content available")
+        payload = {
+            "title": item.title,
+            "transcript": item.transcript,
+            "slides_data": item.slides_data,
+        }
+        return JSONResponse(
+            content=payload,
+            headers={
+                "Content-Disposition": f'attachment; filename="{content_id}.json"',
+            },
+        )
+
     if item.content_type not in {"audio", "video_walkthrough"}:
-        raise HTTPException(status_code=400, detail="Download is only supported for audio content")
+        raise HTTPException(
+            status_code=400,
+            detail="Download supports audio, video_walkthrough (MP3), or presentation (JSON)",
+        )
     if not item.storage_key:
         raise HTTPException(status_code=404, detail="No generated file available")
 
@@ -142,4 +162,6 @@ async def stream_study_content(
     response = await download_study_content(content_id=content_id, db=db, _user=_user)
     if isinstance(response, FileResponse):
         return FileResponse(path=response.path, media_type="audio/mpeg")
+    if isinstance(response, JSONResponse):
+        return response
     return response
