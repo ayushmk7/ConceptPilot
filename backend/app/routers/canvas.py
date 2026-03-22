@@ -128,10 +128,28 @@ async def get_project(project_id: UUID, db: AsyncSession = Depends(get_db)):
         .all()
     )
 
+    # For artifact nodes, fetch the latest message content so the frontend
+    # can render the artifact immediately without a separate messages fetch.
+    node_dicts = []
+    for n in nodes:
+        d = _node_dict(n)
+        if n.type == "artifact":
+            artifact_msg = (
+                await db.execute(
+                    select(CanvasMessage)
+                    .where(CanvasMessage.node_id == n.id)
+                    .order_by(CanvasMessage.created_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if artifact_msg:
+                d["content"] = artifact_msg.content
+        node_dicts.append(d)
+
     return {
         "id": str(project.id),
         "title": project.title,
-        "nodes": [_node_dict(n) for n in nodes],
+        "nodes": node_dicts,
         "edges": [_edge_dict(e) for e in edges],
     }
 
@@ -203,6 +221,17 @@ async def update_node(
                     "node_id": str(node_id),
                     "x": node.position_x,
                     "y": node.position_y,
+                },
+            )
+        )
+    elif "skill" in updated:
+        asyncio.create_task(
+            broadcast(
+                str(node.project_id),
+                {
+                    "type": "node_skill_changed",
+                    "node_id": str(node_id),
+                    "skill": node.skill,
                 },
             )
         )

@@ -9,6 +9,7 @@ from app.config import settings
 from app.models.canvas import CanvasMessage, CanvasNode
 from app.services.canvas.context import assemble_context
 from app.services.canvas.tool_execution import (
+    execute_create_artifact,
     execute_create_branches,
     execute_create_flashcard,
     execute_generate_quiz,
@@ -46,6 +47,8 @@ async def _execute_tool(
         result = await execute_create_branches(tool_input, parent_node, db)
     elif tool_name == "generate_quiz":
         result = await execute_generate_quiz(tool_input, parent_node, db)
+    elif tool_name == "create_artifact":
+        result = await execute_create_artifact(tool_input, parent_node, db)
     elif tool_name == "create_flashcard":
         result = await execute_create_flashcard(tool_input, parent_node, db)
     elif tool_name == "suggest_branch":
@@ -72,16 +75,28 @@ async def stream_canvas_response(
     db: AsyncSession,
 ) -> AsyncGenerator[str, None]:
     try:
-        # 1. Save user message before calling Anthropic
+        # 1. Assemble context from linked nodes BEFORE saving the current user message.
+        #    This ensures own_history does not include the current turn (which hasn't been
+        #    written to DB yet), preventing a duplicate / consecutive-user-message error.
+        system_prompt, messages, context_truncated = await assemble_context(node_id, db)
+
+        # 2. Append the new user message to the conversation.
+        #    If the last entry is already a user message with content blocks (e.g. a
+        #    file/image injected by context assembly), merge the text into it so there
+        #    are no consecutive user-role turns — the Anthropic API forbids that.
+        if (
+            messages
+            and messages[-1]["role"] == "user"
+            and isinstance(messages[-1]["content"], list)
+        ):
+            messages[-1]["content"].append({"type": "text", "text": content})
+        else:
+            messages.append({"role": "user", "content": content})
+
+        # 3. Persist the user message to DB now that the messages array is built.
         user_msg = CanvasMessage(node_id=node_id, role="user", content=content)
         db.add(user_msg)
         await db.flush()
-
-        # 2. Assemble context from linked nodes
-        system_prompt, messages, context_truncated = await assemble_context(node_id, db)
-
-        # 3. Append the new user message to the conversation
-        messages.append({"role": "user", "content": content})
 
         client = get_client()
         parent_node = await db.get(CanvasNode, node_id)

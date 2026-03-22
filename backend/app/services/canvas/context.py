@@ -31,9 +31,12 @@ async def assemble_context(
         for m in own_msgs.scalars().all()
         if m.role in ("user", "assistant")
     ]
-    # Step 2 — find all nodes connected TO this node (one hop only)
+    # Step 2 — find all nodes connected to this node in either direction (one hop)
+    from sqlalchemy import or_
     edges = await db.execute(
-        select(CanvasEdge).where(CanvasEdge.target_node_id == node_id)
+        select(CanvasEdge).where(
+            or_(CanvasEdge.target_node_id == node_id, CanvasEdge.source_node_id == node_id)
+        )
     )
 
     # Step 3 — gather content from each connected source node by type
@@ -41,7 +44,9 @@ async def assemble_context(
     artifact_references = []
 
     for edge in edges.scalars().all():
-        source = await db.get(CanvasNode, edge.source_node_id)
+        # Resolve the "other" node regardless of which end this chat node is on
+        other_id = edge.source_node_id if edge.target_node_id == node_id else edge.target_node_id
+        source = await db.get(CanvasNode, other_id)
         if not source:
             continue
 
@@ -152,7 +157,44 @@ async def assemble_context(
         )
     system_prompt = "\n".join(system_parts)
 
-    messages = linked_messages + own_history
+    # Merge file content blocks (image/document user messages) with the first user
+    # message in own_history to avoid consecutive user-role turns, which the
+    # Anthropic API forbids.  File blocks become the leading content of that turn.
+    file_blocks: list[dict] = []
+    non_file_linked: list[dict] = []
+    for msg in linked_messages:
+        if (
+            msg["role"] == "user"
+            and isinstance(msg["content"], list)
+            and msg["content"]
+            and msg["content"][0].get("type") in ("image", "document")
+        ):
+            file_blocks.extend(msg["content"])
+        else:
+            non_file_linked.append(msg)
+
+    if file_blocks and own_history:
+        # Prepend file blocks to the earliest user message in own_history
+        first_user_idx = next(
+            (i for i, m in enumerate(own_history) if m["role"] == "user"), None
+        )
+        if first_user_idx is not None:
+            orig = own_history[first_user_idx]
+            existing_content = (
+                orig["content"]
+                if isinstance(orig["content"], list)
+                else [{"type": "text", "text": orig["content"]}]
+            )
+            own_history = list(own_history)
+            own_history[first_user_idx] = {
+                "role": "user",
+                "content": file_blocks + existing_content,
+            }
+            file_blocks = []  # consumed
+
+    # Re-assemble: any remaining file blocks (no own_history yet) stay as leading msgs
+    file_messages = [{"role": "user", "content": file_blocks}] if file_blocks else []
+    messages = non_file_linked + file_messages + own_history
 
     # Step 5 — truncation
     # Simplified truncation: keep the tail of each half.

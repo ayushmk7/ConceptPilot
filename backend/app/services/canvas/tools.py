@@ -70,6 +70,28 @@ CANVAS_TOOLS = [
         },
     },
     {
+        "name": "create_artifact",
+        "description": (
+            "ONLY call this when the student EXPLICITLY asks to create, save, or export "
+            "content as a canvas node — e.g. 'save this as a note', 'create a code artifact', "
+            "'put this in a node', 'make a markdown artifact', 'export this code'. "
+            "Do NOT call for normal explanations or conversation. "
+            "Creates an artifact node on the canvas with the content as markdown or code."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Short title for the artifact node"},
+                "content": {"type": "string", "description": "Full markdown or code content"},
+                "language": {
+                    "type": "string",
+                    "description": "Programming language if this is a code artifact (e.g. 'python', 'javascript'). Omit for plain markdown.",
+                },
+            },
+            "required": ["title", "content"],
+        },
+    },
+    {
         "name": "create_flashcard",
         "description": (
             "ONLY call this when the student EXPLICITLY asks for a flashcard — e.g. "

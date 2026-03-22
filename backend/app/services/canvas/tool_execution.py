@@ -101,14 +101,75 @@ async def execute_generate_quiz(
     await db.flush()
     await db.commit()
 
-    node_data = _node_dict(artifact)
+    edge = CanvasEdge(
+        project_id=parent_node.project_id,
+        source_node_id=parent_node.id,
+        target_node_id=artifact.id,
+    )
+    db.add(edge)
+    await db.flush()
+    await db.commit()
+
+    node_data = {**_node_dict(artifact), "content": markdown}
+    edge_data = _edge_dict(edge)
+
     asyncio.create_task(
         broadcast(
             str(parent_node.project_id), {"type": "node_created", "node": node_data}
         )
     )
+    asyncio.create_task(
+        broadcast(
+            str(parent_node.project_id), {"type": "edge_created", "edge": edge_data}
+        )
+    )
 
-    return {"node": node_data}
+    return {"nodes": [node_data], "edges": [edge_data]}
+
+
+async def execute_create_artifact(
+    tool_input: dict,
+    parent_node: CanvasNode,
+    db: AsyncSession,
+) -> dict:
+    """Create a generic artifact node with markdown or code content."""
+    title = tool_input.get("title", "Artifact")
+    content = tool_input.get("content", "")
+
+    artifact = CanvasNode(
+        project_id=parent_node.project_id,
+        type="artifact",
+        title=title,
+        position_x=parent_node.position_x + 350,
+        position_y=parent_node.position_y - 100,
+    )
+    db.add(artifact)
+    await db.flush()
+
+    msg = CanvasMessage(node_id=artifact.id, role="assistant", content=content)
+    db.add(msg)
+    await db.flush()
+
+    edge = CanvasEdge(
+        project_id=parent_node.project_id,
+        source_node_id=parent_node.id,
+        target_node_id=artifact.id,
+    )
+    db.add(edge)
+    await db.flush()
+    await db.commit()
+
+    node_data = {**_node_dict(artifact), "content": content}
+    edge_data = _edge_dict(edge)
+
+    asyncio.create_task(
+        broadcast(str(parent_node.project_id), {"type": "node_created", "node": node_data})
+    )
+    asyncio.create_task(
+        broadcast(str(parent_node.project_id), {"type": "edge_created", "edge": edge_data})
+    )
+
+    return {"nodes": [node_data], "edges": [edge_data]}
 
 
 async def execute_create_flashcard(
