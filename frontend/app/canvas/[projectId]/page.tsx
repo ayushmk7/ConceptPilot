@@ -24,6 +24,9 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 import { ChatNode, type OnBranchCreate } from '@/components/canvas/ChatNode';
+import { ImageNode } from '@/components/canvas/ImageNode';
+import { DocumentNode } from '@/components/canvas/DocumentNode';
+import { ArtifactNode } from '@/components/canvas/ArtifactNode';
 import { SmartEdge } from '@/components/canvas/edges/SmartEdge';
 import { Toolbar, type CanvasFile } from '@/components/canvas/panels/Toolbar';
 import { SettingsPanel } from '@/components/canvas/panels/SettingsPanel';
@@ -242,7 +245,7 @@ function CanvasPageInner() {
 
   /* ── Node types ── */
   const nodeTypes = useMemo(
-    () => ({ chat: ChatNode }),
+    () => ({ chat: ChatNode, image: ImageNode, document: DocumentNode, artifact: ArtifactNode }),
     [],
   );
 
