@@ -37,7 +37,7 @@ export function LinearChatView({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3">
+      <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3 scrollbar-hidden">
         {messages.length === 0 && !isLoading && (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
             Start a conversation to get help studying

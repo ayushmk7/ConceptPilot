@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Loader2, Bot, User } from 'lucide-react';
+import { CornerDownLeft, Loader2, Bot, User } from 'lucide-react';
 import type { ApiError, ChatMessage } from '@/lib/types';
 import * as api from '@/lib/api';
 import type { ChatSurface } from '@/lib/api';
@@ -211,7 +211,7 @@ export function ChatAssistantPanel({ surface, initialSessionId, variant = 'dock'
               : 'Student workspace is not ready yet.'}
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 scrollbar-hidden">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
             {msg.role === 'assistant' && (
@@ -293,7 +293,7 @@ export function ChatAssistantPanel({ surface, initialSessionId, variant = 'dock'
             disabled={!input.trim() || isLoading || studentChatBlocked}
             className="w-9 h-9 rounded-lg bg-primary hover:bg-chart-2 text-white flex items-center justify-center transition-colors disabled:opacity-40 flex-shrink-0"
           >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CornerDownLeft className="w-4 h-4" />}
           </button>
         </div>
       </div>
