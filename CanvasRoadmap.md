@@ -624,12 +624,49 @@ Build in this sequence. Each step is independently testable.
 6. Canvas drag-and-drop file handler → calls upload endpoint → adds node at drop position
 7. **Test**: Branch a conversation, upload an image, draw edge to chat, ask Claude about image
 
-### Phase 5 — Tools & Auto-Branch ⏸ POSTPONED
+### Phase 5 — Tools & Artifacts 🔄 IN PROGRESS
 
-> Deferred until Phases 3, 4, and 6 are complete. Can be added as an enhancement after demo.
+> Phases 1, 2, 4, and 6 are complete. Phase 5 is now the active backend focus.
 
-- Backend: `services/canvas/tools.py` + wire into `claude.py`
-- Frontend: `tool_result` SSE handling, `ArtifactNode.tsx`, `SkillPicker.tsx`
+#### Artifact Design Decisions
+
+- All artifacts are stored as **markdown** (with inline math using `$...$` / `$$...$$` syntax)
+- Frontend renders with `react-markdown` + `remark-math` + `rehype-katex` for math support
+- **LaTeX document generation dropped** — KaTeX renders math expressions only, not full LaTeX documents. Markdown + KaTeX covers 95% of the use case with zero server-side complexity.
+- Artifact nodes are **connectable** — draw an edge from an artifact node to a chat node and the context assembly engine (`context.py`) injects the artifact content into the system prompt as reference material. Students can branch off artifacts to discuss them.
+- All artifacts are **downloadable** as `.md` files via `GET /api/canvas/nodes/:id/artifact/download`
+
+#### Artifact Content Types (stored as markdown in `canvas_messages`)
+
+| Type | Stored as | Renders as |
+|---|---|---|
+| `quiz` | Markdown with Q&A structure | Interactive card or rendered markdown |
+| `flashcard` | Markdown with term/definition/example | Flip card UI or rendered markdown |
+| `study_guide` | Freeform markdown | Rendered markdown + download button |
+| Math-heavy content | Markdown with `$math$` syntax | KaTeX-rendered equations |
+
+#### Tool Definitions (priority order)
+
+| Tool | Priority | Effect |
+|---|---|---|
+| `create_branches` | 1 — highest demo impact | Creates N child chat nodes + edges in DB; broadcasts via WebSocket |
+| `generate_quiz` | 2 | Creates artifact node with quiz markdown; connectable to chat |
+| `create_flashcard` | 3 | Creates artifact node with flashcard markdown; connectable to chat |
+| `suggest_branch` | 4 — stretch | Returns suggestion only; no DB write; frontend shows confirm UI |
+
+**Backend tasks:**
+1. `services/canvas/tools.py` — tool JSON schemas for Claude (`create_branches`, `generate_quiz`, `create_flashcard`, `suggest_branch`)
+2. Wire tool handling into `claude.py` — separate accumulation + execution code path (finish stream → execute tool → emit `tool_result` SSE → follow-up stream)
+3. Implement `create_branches` execution — create N child nodes + edges in DB, broadcast `node_created` + `edge_created` per node/edge
+4. Implement `generate_quiz` execution — create artifact node + store quiz as markdown message, broadcast `node_created`
+5. Implement `create_flashcard` execution — create artifact node + store flashcard as markdown message, broadcast `node_created`
+6. Add `GET /api/canvas/nodes/:id/artifact/download` endpoint — serves artifact content as `.md` file download
+
+**Frontend tasks (partner):**
+7. Handle `tool_result` SSE events — render new nodes/edges immediately from event payload
+8. `ArtifactNode.tsx` — renders markdown content with KaTeX math support + download button
+9. Install `remark-math` + `rehype-katex` for math rendering in artifact nodes
+10. **Test**: Ask Claude a multi-angle question → `create_branches` fires → new nodes appear on canvas; ask for a quiz → artifact node appears, draw edge to new chat, discuss it
 
 ### Phase 6 — Multiplayer
 
@@ -660,6 +697,10 @@ Build in this sequence. Each step is independently testable.
 | Context size | `max_tokens=1024` for canvas chat during development; raise to `4096` for demo. Add rate limiting before exposing to real users. |
 | Canvas page layout conflict | `app/canvas/page.tsx` currently uses `InstructorLayout`. The new `app/canvas/layout.tsx` will apply to all routes under `/canvas/*`, overriding the root layout. The old `app/canvas/page.tsx` becomes a project-listing or redirect page and no longer uses `InstructorLayout`. |
 | React Flow import | Already using `@xyflow/react` (v12). Import from `@xyflow/react`, not `reactflow`. The existing canvas page already shows the correct import pattern. |
+| Artifact format | All artifacts stored as markdown. LaTeX document generation dropped — KaTeX handles math expressions inside markdown. No server-side PDF compilation. |
+| Artifact download | `GET /api/canvas/nodes/:id/artifact/download` — returns raw markdown as `Content-Disposition: attachment; filename=artifact.md`. |
+| Artifact math rendering | Frontend uses `react-markdown` + `remark-math` + `rehype-katex`. Inline math: `$...$`. Block math: `$$...$$`. |
+| Artifact nodes as context | Artifact node content is injected into the system prompt (not conversation history) when a downstream chat node references it via an edge. Already handled in `context.py`. |
 
 ---
 

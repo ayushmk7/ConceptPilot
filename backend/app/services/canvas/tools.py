@@ -9,10 +9,12 @@ CANVAS_TOOLS = [
     {
         "name": "create_branches",
         "description": (
-            "Create multiple parallel conversation branches when there are genuinely "
-            "distinct approaches worth exploring separately. Call this when you see "
-            "2-4 meaningfully different angles on the question. Each branch becomes "
-            "a new chat node on the canvas connected to this one."
+            "ONLY call this when the student EXPLICITLY asks to explore multiple angles, "
+            "approaches, or perspectives at the same time — e.g. 'show me two ways to think "
+            "about this', 'explore this from different angles', 'create branches'. "
+            "Do NOT call for simple factual questions, definitions, or explanations. "
+            "Do NOT call unless the student directly requests branching. "
+            "Creates parallel chat nodes on the canvas, one per branch."
         ),
         "input_schema": {
             "type": "object",
@@ -35,10 +37,11 @@ CANVAS_TOOLS = [
     {
         "name": "generate_quiz",
         "description": (
-            "Generate a short quiz from the current conversation to test the student's "
-            "understanding. Creates an artifact node on the canvas with the quiz as "
-            "markdown. The student can draw an edge from the quiz node to a new chat "
-            "node to discuss specific questions."
+            "ONLY call this when the student EXPLICITLY asks for a quiz, test, or practice "
+            "questions — e.g. 'quiz me', 'test my understanding', 'give me some questions', "
+            "'generate a quiz'. "
+            "Do NOT call proactively or for general conversation. "
+            "Creates an artifact node on the canvas with the quiz as markdown."
         ),
         "input_schema": {
             "type": "object",
@@ -69,9 +72,10 @@ CANVAS_TOOLS = [
     {
         "name": "create_flashcard",
         "description": (
-            "Create a flashcard artifact node on the canvas for a key term or concept "
-            "from the conversation. Useful for building a study deck as the student "
-            "explores the material."
+            "ONLY call this when the student EXPLICITLY asks for a flashcard — e.g. "
+            "'make a flashcard', 'create a flashcard for this term', 'add this to my deck'. "
+            "Do NOT call proactively during normal explanation or conversation. "
+            "Creates an artifact node on the canvas with the flashcard as markdown."
         ),
         "input_schema": {
             "type": "object",
@@ -86,9 +90,9 @@ CANVAS_TOOLS = [
     {
         "name": "suggest_branch",
         "description": (
-            "Propose a single branch for the student to optionally create. Use this "
-            "when you see one clear alternative direction worth exploring, but want "
-            "the student to decide. Does NOT auto-create — student must confirm in the UI."
+            "ONLY call this when the student EXPLICITLY asks for a branch suggestion — "
+            "e.g. 'what else could we explore', 'suggest a direction', 'what other angle'. "
+            "Do NOT call proactively. Does NOT auto-create — student must confirm in the UI."
         ),
         "input_schema": {
             "type": "object",
