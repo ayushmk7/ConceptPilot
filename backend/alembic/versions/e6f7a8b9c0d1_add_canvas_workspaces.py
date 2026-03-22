@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 from sqlalchemy.dialects import postgresql
 
 revision: str = "e6f7a8b9c0d1"
@@ -18,6 +19,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    insp = inspect(bind)
+    if "canvas_workspaces" in insp.get_table_names():
+        return
+
     op.create_table(
         "canvas_workspaces",
         sa.Column("id", sa.UUID(), nullable=False),
@@ -30,4 +36,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("canvas_workspaces")
+    bind = op.get_bind()
+    insp = inspect(bind)
+    if "canvas_workspaces" in insp.get_table_names():
+        op.drop_table("canvas_workspaces")

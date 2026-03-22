@@ -1,10 +1,10 @@
 """Pydantic request/response schemas for all API endpoints."""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -691,11 +691,21 @@ class ComputeRunResponse(BaseModel):
 class ChatSessionCreate(BaseModel):
     exam_id: Optional[UUID] = None
     title: str = ""
+    surface: Literal["instructor", "student"] = "instructor"
+    report_token: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _student_requires_token(self) -> "ChatSessionCreate":
+        if self.surface == "student":
+            if not (self.report_token or "").strip():
+                raise ValueError("report_token is required when surface is student")
+        return self
 
 
 class ChatSessionResponse(BaseModel):
     id: UUID
     exam_id: Optional[UUID] = None
+    surface: str = "instructor"
     title: Optional[str] = None
     created_by: str
     created_at: datetime
@@ -716,6 +726,8 @@ class ChatMessageResponse(BaseModel):
 class ChatSendRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000)
     exam_id: Optional[UUID] = None
+    surface: Literal["instructor", "student"] = "instructor"
+    report_token: Optional[str] = None
 
     @field_validator("exam_id", mode="before")
     @classmethod

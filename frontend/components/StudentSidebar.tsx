@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Upload, FileText, BookOpen, Headphones, ChevronRight, ChevronLeft, MessageSquare, GitBranch } from 'lucide-react';
+import { AssistantHistoryNav } from '@/components/AssistantHistoryNav';
 
 export function StudentSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -50,6 +51,12 @@ export function StudentSidebar() {
             );
           })}
         </nav>
+
+        <div className={`text-[10px] font-semibold text-muted-foreground tracking-widest px-4 mb-2 mt-6 ${isCollapsed ? 'hidden' : 'block'}`}>
+          QUICK LINKS
+        </div>
+
+        <AssistantHistoryNav surface="student" variant="student" isCollapsed={isCollapsed} />
 
       </div>
 

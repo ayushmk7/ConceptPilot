@@ -443,6 +443,9 @@ class ChatSession(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     exam_id = Column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="CASCADE"), nullable=True)
+    # instructor: full analytics tools; student: personal readiness only (bound via student_id_external)
+    surface = Column(String(20), nullable=False, default="instructor")
+    student_id_external = Column(String(255), nullable=True)
     title = Column(String(255), nullable=True)
     created_by = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=_now, nullable=False)
