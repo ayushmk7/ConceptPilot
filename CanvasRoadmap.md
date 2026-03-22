@@ -589,27 +589,104 @@ Build in this sequence. Each step is independently testable.
 > - Tools (`create_branches`, `generate_quiz`, etc.) — **SKIPPED**, too complex under time pressure
 > - Skills reduced to 3: **Tutor**, **Socratic**, **Research Assistant**
 
-### Phase 3 — Frontend Canvas Route 🤝 FRONTEND HANDOFF
+### Phase 3 — Frontend Canvas Wiring 🔄 ACTIVE
 
-> **Owner: Frontend partner.** Backend is ready — SSE endpoint is live and tested.
-> Partner needs `NEXT_PUBLIC_API_URL=http://localhost:8000` in `frontend/.env.local`.
+> **Owner: You (backend dev taking over frontend wiring).** Frontend partner built all the UI components — they are complete and polished. The gaps are all in the API/socket connections. Backend is fully complete (Phases 1, 2, 4, 5, 6 done).
 
-**What the backend provides (ready now):**
-- `POST /api/canvas/projects` — create project
-- `GET /api/canvas/projects/:id` — load all nodes + edges
-- `POST /api/canvas/projects/:id/nodes` — create node
-- `PATCH /api/canvas/nodes/:id` — update position/skill
-- `POST /api/canvas/nodes/:id/messages` — SSE stream
-- `GET /api/canvas/nodes/:id/messages` — load conversation history
+#### What the frontend partner built (do not rewrite these)
+- `app/canvas/[projectId]/page.tsx` — full canvas page with React Flow, branching, placement mode, linear view, localStorage persistence
+- `app/canvas/layout.tsx` — full-bleed layout, no sidebar
+- All canvas components: `ChatNode`, `ArtifactNode`, `ImageNode`, `DocumentNode`, `MessageList`, `MessageInput`, `SkillPicker`, `BranchSelector`, `Toolbar`, `SettingsPanel`, `LinearChatView`
+- `useStreamingChat` hook — exists but wired to OLD `/chat/sessions` API (non-streaming)
+- `useCanvasSocket` hook — exists but fully stubbed out (WebSocket commented out)
+- `lib/canvas-api.ts` — exists but has workspace API for old endpoints, missing all new `/api/canvas/` calls
 
-**Frontend tasks:**
-1. Create `frontend/app/canvas/layout.tsx` (full-bleed, no sidebar)
-2. Create `frontend/lib/api.ts` (shared fetch wrapper)
-3. Create `frontend/lib/canvas-api.ts` (typed canvas API calls)
-4. Create `frontend/app/canvas/[projectId]/page.tsx` (loads project, initializes React Flow)
-5. Wire `ChatNode.tsx` to real backend: replace mock `setTimeout` with `useStreamingChat` hook
-6. Create `frontend/components/canvas/hooks/useStreamingChat.ts`
-7. **Test**: Open canvas page, type a message, see real Claude response stream
+#### Gaps to fix (priority order)
+
+**1. Rewrite `useStreamingChat` for real SSE**
+- Currently calls old `/chat/sessions` + non-streaming `sendMessage`
+- Must call `POST /api/canvas/nodes/:id/messages` with SSE streaming
+- Must parse `token`, `tool_start`, `tool_result`, `done`, `error` SSE events
+- `tool_result` for `create_branches` → add new nodes + edges to React Flow state
+- `tool_result` for `generate_quiz` / `create_flashcard` → add artifact node to React Flow state
+- `tool_result` for `suggest_branch` → show "Create this branch?" confirmation UI
+- Node ID passed to hook must be a real backend UUID, not a local React Flow ID
+- **Requires session creation flow first** (see item 3)
+
+**2. Register all node types in canvas page**
+- `nodeTypes` currently only has `{ chat: ChatNode }`
+- Must add: `artifact: ArtifactNode`, `image: ImageNode`, `document: DocumentNode`
+- Without this, tool-created artifact/branch nodes cannot render
+
+**3. Add session creation + backend node ID flow**
+- On canvas page mount: call `POST /api/canvas/projects/:id/sessions` with display name → get `session_id`
+- Store `session_id` in `localStorage` (key: `canvas_session_<projectId>`)
+- When creating a new chat node locally, also call `POST /api/canvas/projects/:id/nodes` → get real UUID from backend
+- Pass real UUID as `nodeId` in node `data` so `useStreamingChat` can call `/api/canvas/nodes/:nodeId/messages`
+- On page load: call `GET /api/canvas/projects/:id` to load persisted nodes + edges from DB
+
+**4. Add canvas API functions to `lib/canvas-api.ts`**
+- Add typed wrappers for all `/api/canvas/` endpoints (projects, nodes, edges, messages, sessions, files, artifact download)
+- Keep existing workspace + chat functions — do not remove them (other pages use them)
+
+**5. Wire `useCanvasSocket`**
+- Uncomment the WebSocket connection code (URL pattern is already correct in the comments)
+- Handle incoming events: `node_created`, `node_moved`, `node_collapsed`, `node_deleted`, `edge_created`, `edge_deleted`, `node_locked`, `node_unlocked`, `session_joined`, `session_left`
+- For `node_created`: add node to React Flow state
+- For `node_moved`: update node position in React Flow state
+- For `node_deleted`: remove node from React Flow state
+- For `node_locked` / `node_unlocked`: update lock indicator on node
+- For `session_joined` / `session_left`: update presence avatars (currently hardcoded)
+- Send `lock_request` / `lock_release` when user focuses / blurs a node
+- Send `node_moved` on React Flow `onNodeDragStop`
+
+**6. Fix `ArtifactNode` for markdown + download**
+- Currently renders `data.content` as `<pre><code>` (code block style)
+- Must render as markdown using `react-markdown` + `remark-math` + `rehype-katex`
+- Add download button that calls `GET /api/canvas/nodes/:id/artifact/download`
+- `data.nodeId` must be passed from canvas page so download endpoint can be called
+- Install: `react-markdown`, `remark-math`, `rehype-katex`, `katex`
+
+#### SSE event contract (backend → frontend)
+```
+{ "type": "token",       "text": "..." }
+{ "type": "tool_start",  "name": "create_branches" }
+{ "type": "tool_result", "name": "create_branches", "nodes": [...], "edges": [...] }
+{ "type": "tool_result", "name": "generate_quiz",   "node": { ...artifact node } }
+{ "type": "tool_result", "name": "create_flashcard","node": { ...artifact node } }
+{ "type": "tool_result", "name": "suggest_branch",  "title": "...", "reason": "..." }
+{ "type": "done",        "message_id": "...", "usage": {...}, "context_truncated": false }
+{ "type": "error",       "message": "..." }
+```
+
+#### WebSocket event contract (backend → frontend)
+```
+{ "type": "node_created",   "node": { full node object } }
+{ "type": "node_moved",     "node_id": "...", "x": 100, "y": 200 }
+{ "type": "node_collapsed", "node_id": "...", "is_collapsed": true }
+{ "type": "node_deleted",   "node_id": "..." }
+{ "type": "node_locked",    "node_id": "...", "session_id": "...", "display_name": "Alex" }
+{ "type": "node_unlocked",  "node_id": "..." }
+{ "type": "edge_created",   "edge": { full edge object } }
+{ "type": "edge_deleted",   "edge_id": "..." }
+{ "type": "session_joined", "session_id": "...", "display_name": "Alex" }
+{ "type": "session_left",   "session_id": "..." }
+```
+
+#### WebSocket client → server events
+```
+{ "type": "lock_request", "node_id": "..." }
+{ "type": "lock_release", "node_id": "..." }
+{ "type": "node_moved",   "node_id": "...", "x": 100, "y": 200 }
+```
+
+#### Test plan (after DB is back)
+1. Open canvas at `/canvas/<project_id>`, type a message → see real Claude tokens stream
+2. Ask "quiz me" → `tool_result` arrives → artifact node appears on canvas
+3. Ask "explore from two angles using branches" → two new chat nodes appear
+4. Download quiz artifact → `.md` file downloads
+5. Open two browser tabs same URL → create node in tab 1 → appears in tab 2
+6. Lock a node in tab 1 → lock indicator shows in tab 2
 
 ### Phase 4 — Branching & Files
 
