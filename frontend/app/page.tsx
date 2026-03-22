@@ -24,14 +24,16 @@ export default function LandingPage() {
       <div className="relative bg-primary overflow-hidden">
         <StreakingLines className="absolute inset-0 z-0 w-full h-full" />
 
-        <div className="relative z-10 min-h-[85vh] flex flex-col items-center justify-center px-6 pt-20 pb-24 text-center">
+        <div className="relative z-10 min-h-[85vh] flex flex-col items-center justify-center px-6 pt-32 pb-16 text-center">
           <h1 className="mb-0">
             <SplitText
               text="ConceptPilot"
               className="text-6xl md:text-8xl lg:text-9xl font-extrabold text-white tracking-tight font-[family-name:var(--font-sergio-trendy)]"
             />
           </h1>
-          <div className="h-1.5 w-32 bg-accent rounded-full mx-auto mt-4 mb-6" />
+          <BlurFadeIn delay={0.6} duration={0.5} direction="bottom" blur={8}>
+            <div className="h-1.5 w-32 bg-accent rounded-full mx-auto mt-4 mb-6" />
+          </BlurFadeIn>
           <BlurText
             text="Upload exam data, map concepts, and get explainable readiness analytics — for instructors and students alike."
             className="text-lg md:text-xl text-white/70 max-w-2xl mx-auto mb-10"
@@ -70,7 +72,11 @@ export default function LandingPage() {
             </BlurFadeIn>
           </div>
 
-          <ScrollIndicator targetId="features" />
+          <BlurFadeIn delay={1.8} duration={0.6} direction="bottom" blur={10}>
+            <div className="mt-20">
+              <ScrollIndicator targetId="features" />
+            </div>
+          </BlurFadeIn>
         </div>
 
         <WaveDivider fill="var(--background)" />
